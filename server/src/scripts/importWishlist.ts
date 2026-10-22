@@ -23,6 +23,7 @@ import { connectMongo, closeMongo, productsCollection, allowlistCollection } fro
 import { config, hasProviderKey } from '../config/env.js';
 import { productSchema, type Category, type Product } from '../models/product.js';
 import {
+  getProviderProduct,
   searchProviderProducts,
   ProviderError,
   type ProviderProduct,
@@ -463,10 +464,9 @@ async function planImport(
 
   // Closest silhouette first, then popularity.
   const ranked = rankCandidates(match.candidates);
-  const best = ranked.find((candidate) => hasUsablePrice(candidate) && hasListedSizes(candidate));
+  const best = ranked.find(hasUsablePrice);
   if (!best) {
-    const reason = ranked.some(hasUsablePrice) ? 'provider returned no size options' : 'no provider market price';
-    return { query, provider: ranked[0] ?? null, product: null, reason };
+    return { query, provider: ranked[0] ?? null, product: null, reason: 'no provider market price' };
   }
 
   if (seen.has(best.providerProductId)) {
@@ -478,40 +478,66 @@ async function planImport(
     };
   }
 
-  const category = QUERY_CATEGORY_OVERRIDES[query] ?? categoryFor(best);
+  let source = best;
+  if (!hasListedSizes(source)) {
+    try {
+      const detail = await getProviderProduct(best.providerProductId, { includeVariants: true });
+      source = {
+        ...best,
+        ...detail,
+        variants: hasListedSizes(detail) ? detail.variants : best.variants,
+      };
+    } catch (error) {
+      const detail =
+        error instanceof ProviderError
+          ? `${error.kind}: ${error.message}`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+      return { query, provider: best, product: null, reason: `could not load product sizes (${detail})` };
+    }
+  }
+  if (!hasListedSizes(source)) {
+    return { query, provider: source, product: null, reason: 'provider returned no size options' };
+  }
+
+  const category = QUERY_CATEGORY_OVERRIDES[query] ?? categoryFor(source);
   if (!category) {
     return { query, provider: best, product: null, reason: 'provider taxonomy has no store category' };
   }
 
-  const priceUsd = preferredPrice(best);
+  const priceUsd = preferredPrice(source);
   const priceRwf = toRwf(priceUsd, config.catalog.usdToRwfRate);
   if (priceRwf === null) {
     return { query, provider: best, product: null, reason: 'provider returned no usable price' };
   }
   const sizeVariants = [
     ...new Map(
-      (best.variants ?? [])
+      (source.variants ?? [])
         .filter((variant) => variant.size.trim())
-        .map((variant) => [normalize(variant.size), { ...variant, size: variant.size.trim() }]),
+        .map((variant) => {
+          const size = `${variant.sizeType ? `${variant.sizeType.toUpperCase()} ` : ''}${variant.size.trim()}`;
+          return [normalize(size), { ...variant, size }];
+        }),
     ).values(),
   ];
   const record: Product = {
     id: `kicksdb:${best.providerProductId}`,
     provider: 'kicksdb',
-    providerProductId: best.providerProductId,
-    sku: blank(best.sku),
+    providerProductId: source.providerProductId,
+    sku: blank(source.sku),
     // Name and images come from the SAME provider record — never joined.
-    name: best.name,
-    brand: blank(best.brand),
-    colorway: blank(best.colorway),
+    name: source.name,
+    brand: blank(source.brand),
+    colorway: blank(source.colorway),
     category,
     // StockX defaults to 140x100 thumbs; the same asset is served at any size.
-    imageUrl: upgradeImageUrl(best.imageUrl),
+    imageUrl: upgradeImageUrl(source.imageUrl),
     gallery: (() => {
-      const real = upgradeImageUrls(best.gallery.filter((g) => !isPlaceholder(g)));
-      return real.length > 0 ? real : [upgradeImageUrl(best.imageUrl)];
+      const real = upgradeImageUrls(source.gallery.filter((g) => !isPlaceholder(g)));
+      return real.length > 0 ? real : [upgradeImageUrl(source.imageUrl)];
     })(),
-    sourceUrl: best.sourceUrl,
+    sourceUrl: source.sourceUrl,
     priceRwf,
     sizeSystem: blank(sizeVariants.find((variant) => variant.sizeType)?.sizeType),
     variants: sizeVariants.map((variant) => ({
@@ -530,7 +556,7 @@ async function planImport(
   if (!parsed.success) {
     return {
       query,
-      provider: best,
+      provider: source,
       product: null,
       reason: `failed validation: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`,
     };

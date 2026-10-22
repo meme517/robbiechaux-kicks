@@ -143,7 +143,8 @@ Routes: `/`, `/shop`, `/product/:id`, `/about`, `/contact`, `/cart`, `/faq`, `*`
    position, search rank or fuzzy brand match. A record missing an id, title or image is dropped
    entirely rather than paired with an unrelated image.
 2. **A search result is a candidate, not inventory.** The wishlist import uses the store-approved
-   KicksDB price conversion and lists provider sizes; local stock remains unknown until confirmed.
+   KicksDB price conversion and requests KicksDB product variants for listed sizes; local stock
+   remains unknown until confirmed.
 3. **Unverified or unpriced products stay unpublished.** `livePublishBlockers()` lists exactly
    why a record is not live; unknown-stock sizes are visible but cannot be added to the cart.
 4. **No unrelated-shoe substitution.** A broken/missing image renders a neutral
@@ -207,7 +208,8 @@ Once a valid address replaces the placeholder, the footer and Contact page turn 
 
 The wishlist importer matches the requested KicksDB models, converts provider
 USD prices to RWF using `USD_TO_RWF_RATE` (default `1300`), and imports provider
-size options. Review matches with a dry run first:
+size options. It requests `display[variants]=true` from KicksDB's product-detail
+endpoint because search results do not include sizes. Review matches with a dry run first:
 
 ```bash
 npm run import:wishlist -- --dry-run

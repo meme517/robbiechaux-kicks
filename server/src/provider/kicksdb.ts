@@ -333,7 +333,10 @@ export async function searchProviderProducts(
  * Look up ONE provider product by verified ID or slug.
  * Parses `data` as an OBJECT (single-product response shape).
  */
-export async function getProviderProduct(idOrSlug: string): Promise<ProviderProduct> {
+export async function getProviderProduct(
+  idOrSlug: string,
+  options: { includeVariants?: boolean } = {},
+): Promise<ProviderProduct> {
   if (!hasProviderKey()) {
     throw new ProviderError(
       'No provider API key configured (KICKSDB_API_KEY).',
@@ -350,11 +353,15 @@ export async function getProviderProduct(idOrSlug: string): Promise<ProviderProd
     decoded = idOrSlug;
   }
   const safeId = assertSafeIdentifier(decoded, 'product id');
-  const url = `${config.provider.baseUrl}/stockx/products/${encodeURIComponent(safeId)}`;
+  const includeVariants = options.includeVariants === true;
+  const url =
+    `${config.provider.baseUrl}/stockx/products/${encodeURIComponent(safeId)}` +
+    (includeVariants ? '?display%5Bvariants%5D=true' : '');
 
-  const cached = await readCache<unknown>(cacheKey('product', safeId));
+  const productCacheKey = cacheKey(includeVariants ? 'product-variants' : 'product', safeId);
+  const cached = await readCache<unknown>(productCacheKey);
   const payload = cached ?? (await fetchJson(url));
-  if (!cached) await writeCache(cacheKey('product', safeId), payload);
+  if (!cached) await writeCache(productCacheKey, payload);
 
   // Single-product response: { data: { ... } }
   const data = (payload as { data?: unknown }).data;

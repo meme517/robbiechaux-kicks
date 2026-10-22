@@ -77,6 +77,16 @@ describe('mapProviderRecord', () => {
     expect(mapped?.sourceUrl).toBe('https://stockx.com/air-jordan-1-low');
   });
 
+  it('maps provider variant sizes and their size systems', () => {
+    const mapped = provider.mapProviderRecord({
+      id: 'abc-123',
+      title: 'Air Jordan 1 Low',
+      image: 'https://cdn.example/aj1.jpg',
+      variants: [{ id: 'variant-1', size: '4', size_type: 'us m' }],
+    });
+    expect(mapped?.variants).toEqual([{ id: 'variant-1', size: '4', sizeType: 'us m' }]);
+  });
+
   it('drops a record missing an image rather than pairing a name with no image', () => {
     expect(provider.mapProviderRecord({ id: 'x', title: 'Nameless' })).toBeNull();
   });
@@ -152,6 +162,25 @@ describe('getProviderProduct', () => {
     const product = await provider.getProviderProduct('a');
     expect(product.providerProductId).toBe('a');
     expect(product.name).toBe('Shoe A');
+  });
+
+  it('requests variants when requested and parses them', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: {
+          id: 'a',
+          title: 'Shoe A',
+          image: 'https://cdn.example/a.jpg',
+          variants: [{ id: 'v1', size: '4', size_type: 'us m' }],
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const product = await provider.getProviderProduct('a', { includeVariants: true });
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('display%5Bvariants%5D=true');
+    expect(product.variants).toEqual([{ id: 'v1', size: '4', sizeType: 'us m' }]);
   });
 
   it('throws malformed when data is an array for a single lookup', async () => {
