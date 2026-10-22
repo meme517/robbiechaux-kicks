@@ -227,6 +227,16 @@ methods and returns live in `storeConfig.policies` and remain "confirmed by the 
 
 ## Deployment
 
+- **Render + MongoDB Atlas (configured by `render.yaml`)** — create an Atlas M0
+  cluster and a database user, then add the Render API service's outbound IP
+  addresses to the Atlas Network Access IP access list. In Render, create a
+  Blueprint from this repository and provide the Atlas connection string for
+  `MONGODB_URI` when prompted. Keep that URI in Render's environment settings;
+  never commit it or put it in a `VITE_` variable. The Blueprint builds the API
+  and frontend as separate services, configures their API URL and CORS origin,
+  and rewrites frontend deep links to `index.html`.
+- The included Render services use the free plan. Free API instances can spin
+  down when idle, so the first request after inactivity may be slow.
 - **Backend** — run `npm --workspace server run build`, then `node dist/index.js` (or
   `npm --workspace server start`) behind your process manager. Provide the server env vars above.
   Default port `3000` (`PORT`).
