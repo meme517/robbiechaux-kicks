@@ -3,7 +3,7 @@ services:
     name: robbiechaux-kicks-api
     runtime: node
     plan: free
-    buildCommand: npm ci && npm --workspace server run build
+    buildCommand: npm ci --include=dev && npm --workspace server run build
     startCommand: npm --workspace server run start
     healthCheckPath: /api/health
     envVars:
@@ -19,7 +19,7 @@ services:
   - type: web
     name: robbiechaux-kicks
     runtime: static
-    buildCommand: npm ci && npm --workspace client run build
+    buildCommand: npm ci --include=dev && npm --workspace client run build
     staticPublishPath: ./client/dist
     envVars:
       - key: VITE_API_BASE_URL
