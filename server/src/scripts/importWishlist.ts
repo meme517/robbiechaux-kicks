@@ -439,10 +439,8 @@ async function planImport(
       candidates = await searchProviderProducts(attempt, 50);
       searched += 1;
     } catch (err) {
-      lastFailure =
-        err instanceof ProviderError
-          ? { kind: err.kind, message: err.message }
-          : { kind: 'unknown', message: String(err) };
+      if (!(err instanceof ProviderError) || err.kind !== 'not_found') throw err;
+      lastFailure = { kind: err.kind, message: err.message };
       continue;
     }
     // Air Jordans are matched off the provider's own taxonomy; keyword
@@ -488,12 +486,9 @@ async function planImport(
         variants: hasListedSizes(detail) ? detail.variants : best.variants,
       };
     } catch (error) {
+      if (!(error instanceof ProviderError) || error.kind !== 'not_found') throw error;
       const detail =
-        error instanceof ProviderError
-          ? `${error.kind}: ${error.message}`
-          : error instanceof Error
-            ? error.message
-            : String(error);
+        `${error.kind}: ${error.message}`;
       return { query, provider: best, product: null, reason: `could not load product sizes (${detail})` };
     }
   }
