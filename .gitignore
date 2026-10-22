@@ -1,0 +1,20 @@
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+.vscode/*
+!.vscode/extensions.json
+npm-debug.log*
+client/scripts/.smoke-bundle.mjs
+server/dist
+
+# local dev runtime (MongoDB binary + data + logs)
+.tools
+.mongo-data
+.mongo-logs
+.logs

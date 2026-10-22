@@ -1,0 +1,2 @@
+# SPA fallback for Netlify — deep links must serve index.html.
+/*    /index.html   200

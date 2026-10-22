@@ -1,0 +1,28 @@
+{
+  "name": "robbiechaux-kicks",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Robbiechaux Kicks — Phase 2 monorepo (React+TS client, Node/Express+MongoDB API)",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace server run build && npm --workspace client run build",
+    "test": "npm --workspace server run test && npm --workspace client run test",
+    "lint": "npm --workspace server run lint && npm --workspace client run lint",
+    "typecheck": "npm --workspace server run typecheck && npm --workspace client run typecheck",
+    "seed:demo": "npm --workspace server run seed:demo",
+    "import:search": "npm --workspace server run import:search --",
+    "import:approve": "npm --workspace server run import:approve --",
+    "import:api": "npm --workspace server run import:api --",
+    "import:wishlist": "npm --workspace server run import:wishlist --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
