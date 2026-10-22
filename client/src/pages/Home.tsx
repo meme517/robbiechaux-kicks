@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { storeConfig } from '../config/storeConfig';
 import { useCatalog } from '../hooks/useCatalog';
-import { categoryLabel } from '../types/product';
+import { CATEGORIES, categoryLabel } from '../types/product';
 import { storeWhatsappUrl } from '../utils/whatsapp';
 import CategoryIcon from '../components/CategoryIcon';
 import EmptyState from '../components/EmptyState';
@@ -17,8 +17,6 @@ export default function Home() {
 
   const featured = products.filter((p) => p.featured).slice(0, 4);
   const showcase = featured.length > 0 ? featured : products.slice(0, 4);
-  const categories = [...new Set(products.map((p) => p.category))].sort();
-
   return (
     <>
       <PageMeta
@@ -108,16 +106,14 @@ export default function Home() {
             <h2 className="section__title">Shop by category</h2>
           </header>
           <ul className="category-tiles">
-            {(categories.length > 0 ? categories : ['sneakers', 'formal', 'loafers', 'slides', 'clogs']).map(
-              (category) => (
-                <li key={category}>
-                  <Link className="category-tile" to={`/shop?category=${encodeURIComponent(category)}`}>
-                    <CategoryIcon category={category} />
-                    <span className="category-tile__name">{categoryLabel(category)}</span>
-                  </Link>
-                </li>
-              ),
-            )}
+            {CATEGORIES.map((category) => (
+              <li key={category}>
+                <Link className="category-tile" to={`/shop?category=${encodeURIComponent(category)}`}>
+                  <CategoryIcon category={category} />
+                  <span className="category-tile__name">{categoryLabel(category)}</span>
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
       </section>
