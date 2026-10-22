@@ -72,10 +72,17 @@ const ICONS: Record<string, ReactElement> = {
 };
 
 const FALLBACK = ICONS.sneakers;
+const CATEGORY_ICON_ALIASES: Record<string, string> = {
+  casual: 'sneakers',
+  flats: 'loafers',
+  heels: 'formal',
+  sandals: 'slides',
+  espadrilles: 'slides',
+};
 
 /** Line-art category icons (decorative — a text label is always provided). */
 export default function CategoryIcon({ category, className = '' }: { category: string; className?: string }) {
-  const icon = ICONS[category] ?? FALLBACK;
+  const icon = ICONS[category] ?? ICONS[CATEGORY_ICON_ALIASES[category]] ?? FALLBACK;
   return (
     <svg
       className={`category-icon ${className}`.trim()}

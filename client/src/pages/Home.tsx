@@ -21,7 +21,7 @@ export default function Home() {
     <>
       <PageMeta
         title="Step in. Stand out."
-        description="Robbiechaux Kicks — sneakers, loafers, formal shoes, slides and clogs in Kigali, Rwanda. Shop shoes and contact us on WhatsApp. Delivery to Kigali and nearby areas."
+        description="Robbiechaux Kicks — sneakers, running shoes, football boots, flats, heels, loafers, sandals, slides and boots in Kigali, Rwanda. Shop shoes and contact us on WhatsApp."
       />
 
       <section className="hero">
@@ -31,7 +31,7 @@ export default function Home() {
             <h1 className="hero__title">{storeConfig.storeName}</h1>
             <p className="hero__tagline">{storeConfig.tagline}</p>
             <p className="hero__sub">
-              {storeConfig.secondaryTaglines[0]} Sneakers, loafers, formal shoes, slides and clogs
+              {storeConfig.secondaryTaglines[0]} Sneakers, flats, heels, loafers, boots and more
               delivered to {storeConfig.delivery.area}.
             </p>
             <div className="hero__actions">
@@ -124,8 +124,8 @@ export default function Home() {
             <h2 className="section__title">A Kigali shoe store with a loud identity</h2>
             <p>
               Robbiechaux Kicks is a footwear store in {storeConfig.location.label}. Our range covers
-              sneakers, loafers, formal shoes, slides and clogs — pairs for everyday wear, work and
-              going out.
+              sneakers, flats, heels, loafers, boots, sandals and more — pairs for everyday wear, work
+              and going out.
             </p>
             <p>
               We deliver to {storeConfig.delivery.area}. Availability, delivery charges and final

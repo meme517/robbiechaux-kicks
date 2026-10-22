@@ -13,6 +13,7 @@ import ProductCard from '../src/components/ProductCard';
 import Logo from '../src/components/Logo';
 import { storeConfig, hasRealEmail } from '../src/config/storeConfig';
 import { demoCatalog } from '../src/data/demoCatalog';
+import { CATEGORIES, categoryLabel } from '../src/types/product';
 import {
   deriveFilterOptions,
   filterAndSortProducts,
@@ -87,6 +88,14 @@ await check('location and delivery area are present and exact', () => {
   assert(html.includes(storeConfig.phones.secondary.label), 'secondary phone missing');
   assert(html.includes('@robbiechaux.kicks'), 'instagram handle missing');
   return 'store facts OK';
+});
+
+await check('homepage shows every supported shoe category, even before inventory is published', () => {
+  const html = render('/');
+  for (const category of CATEGORIES) {
+    assert(html.includes(categoryLabel(category)), `missing homepage category ${category}`);
+  }
+  return `${CATEGORIES.length} supported categories visible`;
 });
 
 await check('missing logo renders placeholder, never a broken image icon', () => {

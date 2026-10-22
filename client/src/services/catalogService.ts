@@ -12,7 +12,7 @@
  */
 import { storeConfig } from '../config/storeConfig';
 import { demoCatalog } from '../data/demoCatalog';
-import type { CatalogMeta, Product } from '../types/product';
+import { CATEGORIES, type CatalogMeta, type Product } from '../types/product';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? '';
 
@@ -187,7 +187,7 @@ export { CATEGORY_LABELS, categoryLabel } from '../types/product';
 
 /** Filter options derived from actual published inventory. */
 export function deriveFilterOptions(products: Product[]) {
-  const categories = [...new Set(products.map((p) => p.category))].sort();
+  const categories = [...CATEGORIES].sort();
   const brands = [...new Set(products.map((p) => p.brand).filter((b): b is string => Boolean(b)))].sort();
   const sizeSet = new Set<string>();
   products.forEach((p) => p.variants.filter((v) => v.stock > 0).forEach((v) => sizeSet.add(v.size)));

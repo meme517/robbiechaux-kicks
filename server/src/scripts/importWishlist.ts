@@ -7,23 +7,21 @@
  * SAME provider record — nothing is joined by array position or rank.
  *
  * Usage:
- *   npm run import:wishlist                 import the built-in list
+ *   npm run import:wishlist                 save matched products as unpublished drafts
  *   npm run import:wishlist -- --dry-run    search + print, write nothing
  *   npm run import:wishlist -- --file list.txt
  *   npm run import:wishlist -- --all-colorways
- *   npm run import:wishlist -- --rate 1450 --stock 3
  *   npm run import:wishlist -- --limit 10   stop after N models (smoke test)
  *
  * HONESTY NOTES
- *  - Prices: the provider publishes USD. USD_TO_RWF_RATE converts them so a
- *    product can be published at all; each record stores the source figure.
- *  - Stock: the provider carries NO stock data. --stock (default 3) is a
- *    placeholder the owner must replace with real local stock.
+ *  - Provider market prices are reference data, never the store's RWF selling price.
+ *  - The provider carries no local stock data. Imported products stay unpublished
+ *    until the owner supplies a real RWF price and size/stock variants.
  *  - A model the provider does not carry is reported as SKIPPED, never faked.
  */
 import { connectMongo, closeMongo, productsCollection, allowlistCollection } from '../db/mongo.js';
 import { config, hasProviderKey } from '../config/env.js';
-import { productSchema, type Category, type Product, type Variant } from '../models/product.js';
+import { productSchema, type Category, type Product } from '../models/product.js';
 import {
   searchProviderProducts,
   ProviderError,
@@ -64,6 +62,18 @@ const WISHLIST: string[] = [
   // Football boots
   'Adidas Predator', 'Adidas Copa', 'Adidas F50', 'Nike Mercurial', 'Nike Phantom',
   'Puma Future', 'Puma Ultra',
+  // Women's flats, heels, everyday shoes and boots
+  "Women's Mary Jane Shoes", "Women's Pointed-Toe Flats",
+  "Women's Classic Pumps", "Women's Stiletto Heels", "Women's Block Heels",
+  "Women's Kitten Heels", "Women's Court Shoes", "Women's Slingback Heels",
+  "Women's Peep-Toe Heels", "Women's Wedge Shoes", "Women's Platform Heels",
+  "Women's Elegant Loafers", "Women's Mules", "Women's Dress Shoes",
+  "Women's Wedding Shoes", "Women's Ankle Boots", "Women's Knee-High Boots",
+  "Women's Chelsea Boots", "Women's Heeled Boots", "Women's Sandals",
+  "Women's Flat Sandals", "Women's Elegant Slides", "Women's Espadrilles",
+  "Women's Sneakers", "Women's Running Shoes", "Women's Casual Shoes",
+  // Additional men's boot models
+  "Men's Chelsea Boots", "Men's Hiking Boots", "Men's Combat Boots",
 ];
 
 const BRAND_PREFIXES = [
@@ -286,11 +296,6 @@ function rankCandidates(candidates: ProviderProduct[]): ProviderProduct[] {
   });
 }
 
-/** Prices the provider actually published, for price fallback below. */
-function hasUsablePrice(c: ProviderProduct): boolean {
-  return toRwf(c.providerAvgPriceUsd ?? c.providerMinPriceUsd ?? c.providerMaxPriceUsd, 1) !== null;
-}
-
 /**
  * Provider taxonomy -> store category. Boots and sandals get their own buckets
  * instead of being forced into "formal" or "sneakers".
@@ -316,10 +321,15 @@ function categoryFor(p: ProviderProduct): Category | null {
   if (/\bbasketball\b/.test(tags) || normalize(p.category ?? '') === 'air jordan') {
     return 'basketball';
   }
-  if (/\b(slide|sandal|flip flop|mule)/.test(tags)) return 'slides';
+  if (/\bespadrille/.test(tags)) return 'espadrilles';
+  if (/\b(sandal|flip flop)/.test(tags)) return 'sandals';
+  if (/\b(slide|mule)/.test(tags)) return 'slides';
+  if (/\b(flat|mary jane)/.test(tags)) return 'flats';
+  if (/\b(heel|pump|court shoe|wedge|slingback)/.test(tags)) return 'heels';
   if (/\bloafer/.test(tags)) return 'loafers';
   if (/\bboot/.test(tags)) return 'boots';
   if (/\b(heeled?|pump|dress)\b/.test(tags)) return 'formal';
+  if (/\bcasual\b/.test(tags)) return 'casual';
   if (/\b(sneaker|shoe|athletic|lifestyle)\b/.test(tags)) return 'sneakers';
   // product_type is "sneakers" for almost everything the provider carries.
   if (productType === 'sneakers') return 'sneakers';
@@ -335,6 +345,36 @@ function categoryFor(p: ProviderProduct): Category | null {
 const QUERY_CATEGORY_OVERRIDES: Record<string, Category> = {
   'Timberland Premium 6-Inch Boot': 'boots',
   'Dr. Martens 1460': 'boots',
+  "Women's Mary Jane Shoes": 'flats',
+  "Women's Pointed-Toe Flats": 'flats',
+  "Women's Classic Pumps": 'heels',
+  "Women's Stiletto Heels": 'heels',
+  "Women's Block Heels": 'heels',
+  "Women's Kitten Heels": 'heels',
+  "Women's Court Shoes": 'heels',
+  "Women's Slingback Heels": 'heels',
+  "Women's Peep-Toe Heels": 'heels',
+  "Women's Wedge Shoes": 'heels',
+  "Women's Platform Heels": 'heels',
+  "Women's Elegant Loafers": 'loafers',
+  "Women's Mules": 'slides',
+  "Women's Dress Shoes": 'formal',
+  "Women's Wedding Shoes": 'formal',
+  "Women's Ankle Boots": 'boots',
+  "Women's Knee-High Boots": 'boots',
+  "Women's Chelsea Boots": 'boots',
+  "Women's Heeled Boots": 'boots',
+  "Women's Combat Boots": 'boots',
+  "Women's Sandals": 'sandals',
+  "Women's Flat Sandals": 'sandals',
+  "Women's Elegant Slides": 'slides',
+  "Women's Espadrilles": 'espadrilles',
+  "Women's Sneakers": 'sneakers',
+  "Women's Running Shoes": 'running',
+  "Women's Casual Shoes": 'casual',
+  "Men's Chelsea Boots": 'boots',
+  "Men's Hiking Boots": 'boots',
+  "Men's Combat Boots": 'boots',
   // StockX cannot identify its own football boots: these arrive tagged
   // "lifestyle", "oxfords" or bare "performance". The owner named them as
   // football boots on the shopping list, so the owner's bucket wins.
@@ -346,24 +386,6 @@ const QUERY_CATEGORY_OVERRIDES: Record<string, Category> = {
   'Puma Future': 'football',
   'Puma Ultra': 'football',
 };
-
-const SIZE_RUNS: Record<string, number[]> = {
-  men: [40, 41, 42, 43, 44, 45, 46],
-  women: [36, 37, 38, 39, 40, 41],
-  kids: [33, 34, 35, 36, 37, 38],
-};
-const UNISEX_RUN = [36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46];
-
-function variantsFor(gender: string | undefined, stock: number): Variant[] {
-  const run = SIZE_RUNS[(gender ?? '').toLowerCase()] ?? UNISEX_RUN;
-  return run.map((size) => ({ id: `size-${size}`, size: String(size), stock }));
-}
-
-/** Convert the provider's USD figure into an editable RWF starting price. */
-function toRwf(usd: number | null | undefined, rate: number): number | null {
-  if (usd === null || usd === undefined || !Number.isFinite(usd) || usd <= 0) return null;
-  return Math.max(500, Math.round((usd * rate) / 500) * 500);
-}
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -380,8 +402,6 @@ interface Plan {
 
 async function planImport(
   query: string,
-  rate: number,
-  stock: number,
   seen: Set<string>,
 ): Promise<Plan> {
   // KicksDB's search is fuzzy and brand-heavy queries ("Nike Air Jordan 4")
@@ -422,18 +442,10 @@ async function planImport(
     };
   }
 
-  // Closest silhouette first, then popularity. Some records publish no price
-  // at all — fall through to the next match instead of dropping the model.
+  // Closest silhouette first, then popularity.
   const ranked = rankCandidates(match.candidates);
-  const best = ranked.find(hasUsablePrice);
-  if (!best) {
-    return {
-      query,
-      provider: ranked[0] ?? null,
-      product: null,
-      reason: 'provider returned no price for any matching colorway',
-    };
-  }
+  const best = ranked[0];
+  if (!best) return { query, provider: null, product: null, reason: 'no matching provider record' };
 
   if (seen.has(best.providerProductId)) {
     return {
@@ -447,12 +459,6 @@ async function planImport(
   const category = QUERY_CATEGORY_OVERRIDES[query] ?? categoryFor(best);
   if (!category) {
     return { query, provider: best, product: null, reason: 'provider taxonomy has no store category' };
-  }
-
-  const priceUsd = best.providerAvgPriceUsd ?? best.providerMinPriceUsd ?? best.providerMaxPriceUsd;
-  const priceRwf = toRwf(priceUsd, rate);
-  if (priceRwf === null) {
-    return { query, provider: best, product: null, reason: 'provider returned no price to convert' };
   }
 
   const record: Product = {
@@ -472,11 +478,11 @@ async function planImport(
       return real.length > 0 ? real : [upgradeImageUrl(best.imageUrl)];
     })(),
     sourceUrl: best.sourceUrl,
-    priceRwf,
+    priceRwf: null,
     sizeSystem: 'EU',
-    variants: variantsFor(best.gender, stock),
-    verificationStatus: 'verified',
-    published: true,
+    variants: [],
+    verificationStatus: 'pending',
+    published: false,
     imageIsCatalogArt: true,
     imageAttribution: config.provider.imageAttribution,
     arrivedAt: new Date().toISOString(),
@@ -501,10 +507,9 @@ async function planImport(
       importMeta: {
         source: 'kicksdb',
         matchedPhrase: match.phrase,
-        sourcePriceUsd: priceUsd,
-        usdToRwfRate: rate,
-        priceIsConverted: true,
-        stockIsPlaceholder: true,
+        sourcePriceUsd:
+          best.providerAvgPriceUsd ?? best.providerMinPriceUsd ?? best.providerMaxPriceUsd ?? null,
+        priceIsStoreConfirmed: false,
       },
     } as Product,
   };
@@ -528,8 +533,6 @@ async function main() {
     return;
   }
 
-  const rate = Number(arg('rate') ?? config.catalog.usdToRwfRate);
-  const stock = Number(arg('stock') ?? 3);
   const limit = arg('limit') ? Number(arg('limit')) : undefined;
   const dryRun = flag('dry-run');
   const allColorways = flag('all-colorways');
@@ -540,7 +543,7 @@ async function main() {
   const seen = new Set<string>();
   const plans: Plan[] = [];
   for (const query of list) {
-    plans.push(await planImport(query, rate, stock, seen));
+    plans.push(await planImport(query, seen));
     if (plans.length % 10 === 0) process.stdout.write(`  ...${plans.length}/${list.length}\n`);
   }
 
@@ -552,11 +555,16 @@ async function main() {
     const product = p.product as Product;
     console.log(`${p.query}`);
     console.log(`  -> ${product.name}`);
-    console.log(
-      `     ${product.id}  ${product.category}  ${product.priceRwf} RWF  (${p.provider?.providerAvgPriceUsd ?? p.provider?.providerMinPriceUsd} USD @ ${rate})`,
-    );
+    console.log(`     ${product.id}  ${product.category}  unpublished draft`);
+    const referenceUsd =
+      p.provider?.providerAvgPriceUsd ??
+      p.provider?.providerMinPriceUsd ??
+      p.provider?.providerMaxPriceUsd;
+    if (referenceUsd !== null && referenceUsd !== undefined) {
+      console.log(`     provider market reference: ${referenceUsd} USD (not a store price)`);
+    }
     console.log(`     image: ${product.imageUrl}`);
-    console.log(`     sizes: ${product.variants.map((v) => v.size).join(',')} (stock ${stock} each — placeholder)`);
+    console.log('     price and sizes/stock: owner confirmation required');
   }
 
   if (skipped.length > 0) {
@@ -612,7 +620,7 @@ async function main() {
 
   console.log(`\nWrote ${written} product(s) + allowlist entries to ${config.mongo.dbName}.`);
   console.log(
-    'Prices are converted from provider USD and stock is a placeholder — replace both with your own before going live.',
+    'All imported products are unpublished drafts. Approve each exact model with an owner-confirmed RWF price and real sizes/stock before it can appear on the storefront.',
   );
 }
 

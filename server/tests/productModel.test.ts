@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CATEGORIES,
   isLivePublishable,
   livePublishBlockers,
   productSchema,
@@ -45,6 +46,12 @@ describe('productSchema', () => {
   it('rejects an unknown category', () => {
     const bad = { ...baseProduct(), category: 'cleats' };
     expect(productSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('accepts every storefront footwear category', () => {
+    for (const category of CATEGORIES) {
+      expect(productSchema.safeParse(baseProduct({ category })).success).toBe(true);
+    }
   });
 
   it('rejects a non-integer price', () => {

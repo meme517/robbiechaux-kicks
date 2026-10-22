@@ -205,6 +205,21 @@ Once a valid address replaces the placeholder, the footer and Contact page turn 
 
 ### 5. Publishing real inventory (approval workflow)
 
+The wishlist importer matches the requested KicksDB models and saves them as
+**unpublished drafts**. Provider market prices are reference data, and KicksDB
+does not know the store's actual size-by-size stock. Neither is copied into a
+public selling price or stock count. Review matches with a dry run first:
+
+```bash
+npm run import:wishlist -- --dry-run
+npm run import:wishlist
+```
+
+Only after confirming a model, its real RWF selling price, and actual available
+sizes/stock should you publish it using the approval workflow below. Set the
+rotated `KICKSDB_API_KEY` and Atlas `MONGODB_URI` in `server/.env` for the local
+import command; keep that file private and gitignored.
+
 ```bash
 # 1. Search provider candidates (read-only). Verify an EXACT match yourself.
 npm run import:search -- --query "DZ5485-100"
