@@ -190,7 +190,7 @@ export function deriveFilterOptions(products: Product[]) {
   const categories = [...CATEGORIES].sort();
   const brands = [...new Set(products.map((p) => p.brand).filter((b): b is string => Boolean(b)))].sort();
   const sizeSet = new Set<string>();
-  products.forEach((p) => p.variants.filter((v) => v.stock > 0).forEach((v) => sizeSet.add(v.size)));
+  products.forEach((p) => p.variants.filter((v) => v.stock !== 0).forEach((v) => sizeSet.add(v.size)));
   const sizes = [...sizeSet].sort((a, b) => Number(a) - Number(b));
   const prices = products.map((p) => p.priceRwf ?? 0);
   const priceMin = prices.length ? Math.min(...prices) : 0;
@@ -217,7 +217,7 @@ export function filterAndSortProducts(products: Product[], filters: ShopFilters)
   const filtered = products.filter((p) => {
     if (filters.category && p.category !== filters.category) return false;
     if (filters.brand && p.brand !== filters.brand) return false;
-    if (filters.size && !p.variants.some((v) => v.size === filters.size && v.stock > 0)) return false;
+    if (filters.size && !p.variants.some((v) => v.size === filters.size && v.stock !== 0)) return false;
     const price = p.priceRwf ?? 0;
     if (min !== null && Number.isFinite(min) && price < min) return false;
     if (max !== null && Number.isFinite(max) && price > max) return false;

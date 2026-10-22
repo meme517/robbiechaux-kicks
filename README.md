@@ -142,17 +142,17 @@ Routes: `/`, `/shop`, `/product/:id`, `/about`, `/contact`, `/cart`, `/faq`, `*`
 1. **Name and image come from the same validated record.** They are never joined by array
    position, search rank or fuzzy brand match. A record missing an id, title or image is dropped
    entirely rather than paired with an unrelated image.
-2. **A search result is a candidate, not inventory.** Only the owner's approval
-   (`import:approve`, or `approveCandidate` in code) can create a publishable product.
+2. **A search result is a candidate, not inventory.** The wishlist import uses the store-approved
+   KicksDB price conversion and lists provider sizes; local stock remains unknown until confirmed.
 3. **Unverified or unpriced products stay unpublished.** `livePublishBlockers()` lists exactly
-   why a record is not live; the public catalog returns only records that pass every check.
+   why a record is not live; unknown-stock sizes are visible but cannot be added to the cart.
 4. **No unrelated-shoe substitution.** A broken/missing image renders a neutral
    **"Image unavailable"** panel.
 5. **Provider imagery is labelled.** Provider-sourced metadata/art is flagged
    (`imageIsCatalogArt`) and attributed with `PROVIDER_IMAGE_ATTRIBUTION`; catalog art is never
    described as a photo of physical store stock.
-6. **RWF prices are owner-set numbers.** Seeded demo prices and provider USD/market prices are
-   never relabelled as store prices.
+6. **RWF prices follow the store's configured policy.** Wishlist prices are converted from KicksDB
+   USD prices using `USD_TO_RWF_RATE`; demo prices remain placeholders.
 7. **Demo records are separable.** Demo ids are prefixed `demo:` and demo orders are marked.
 
 ---
@@ -203,22 +203,23 @@ email: '[STORE_EMAIL]',   // ← replace with the real address
 Once a valid address replaces the placeholder, the footer and Contact page turn it into a working
 `mailto:` link automatically.
 
-### 5. Publishing real inventory (approval workflow)
+### 5. Importing the KicksDB wishlist
 
-The wishlist importer matches the requested KicksDB models and saves them as
-**unpublished drafts**. Provider market prices are reference data, and KicksDB
-does not know the store's actual size-by-size stock. Neither is copied into a
-public selling price or stock count. Review matches with a dry run first:
+The wishlist importer matches the requested KicksDB models, converts provider
+USD prices to RWF using `USD_TO_RWF_RATE` (default `1300`), and imports provider
+size options. Review matches with a dry run first:
 
 ```bash
 npm run import:wishlist -- --dry-run
 npm run import:wishlist
 ```
 
-Only after confirming a model, its real RWF selling price, and actual available
-sizes/stock should you publish it using the approval workflow below. Set the
-rotated `KICKSDB_API_KEY` and Atlas `MONGODB_URI` in `server/.env` for the local
-import command; keep that file private and gitignored.
+KicksDB does not report the store's local stock. Imported size options are
+labelled as unconfirmed, cannot be added to the cart, and must be confirmed by
+the store over WhatsApp. Provider prices are converted with the configured
+`USD_TO_RWF_RATE` (the approved default is `1300`). Set the rotated `KICKSDB_API_KEY` and Atlas
+`MONGODB_URI` in `server/.env` for the local import command; keep that file
+private and gitignored.
 
 ```bash
 # 1. Search provider candidates (read-only). Verify an EXACT match yourself.

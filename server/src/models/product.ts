@@ -45,12 +45,12 @@ const optionalString = z.preprocess(
   z.string().min(1).optional(),
 );
 
-/** A size variant with owner-confirmed stock. */
+/** A size listed by the provider or owner; null stock means local availability is unconfirmed. */
 export const variantSchema = z.object({
   id: z.string().min(1),
   size: z.string().min(1),
-  /** Owner-confirmed local stock count (0 = unavailable). */
-  stock: z.number().int().min(0).max(100000),
+  /** Owner-confirmed local stock count (0 = unavailable, null = unconfirmed). */
+  stock: z.number().int().min(0).max(100000).nullable(),
 });
 
 export type Variant = z.infer<typeof variantSchema>;
@@ -95,10 +95,10 @@ export function livePublishBlockers(product: Product): string[] {
   const blockers: string[] = [];
   if (product.verificationStatus !== 'verified') blockers.push('verificationStatus is not "verified"');
   if (!product.published) blockers.push('published is false');
-  if (product.priceRwf === null) blockers.push('no owner-confirmed RWF price');
+  if (product.priceRwf === null) blockers.push('no RWF price');
   if (!product.name?.trim()) blockers.push('missing verified name');
   if (!product.imageUrl?.trim()) blockers.push('missing verified image');
-  if (product.variants.length === 0) blockers.push('no owner-confirmed size variants');
+  if (product.variants.length === 0) blockers.push('no size options');
   return blockers;
 }
 
@@ -116,12 +116,12 @@ export const allowlistEntrySchema = z
     provider: z.enum(providerIds),
     providerProductId: optionalString,
     sku: optionalString,
-    /** OWNER: numeric RWF selling price. null until supplied. */
+    /** Store-listed RWF price. null until supplied or converted from an approved source. */
     priceRwf: z.number().int().min(0).nullable(),
     category: z.enum(CATEGORIES),
     colorway: optionalString,
     sizeSystem: optionalString,
-    /** Owner-confirmed variants (sizes + stock). */
+    /** Listed sizes; local stock may be null until the store confirms availability. */
     variants: z.array(variantSchema),
     featured: z.preprocess((v) => (v === null ? undefined : v), z.boolean().optional()),
     arrivedAt: z.preprocess((v) => (v === null ? undefined : v), z.string().datetime().optional()),

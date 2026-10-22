@@ -39,6 +39,12 @@ describe('productSchema', () => {
     expect(productSchema.safeParse(bad).success).toBe(false);
   });
 
+  it('accepts a provider-listed size with unconfirmed local stock', () => {
+    const product = baseProduct({ variants: [{ id: 'size-42', size: '42', stock: null }] });
+    expect(productSchema.safeParse(product).success).toBe(true);
+    expect(isLivePublishable(product)).toBe(true);
+  });
+
   it('accepts a null price (unpriced, not publishable)', () => {
     expect(productSchema.safeParse(baseProduct({ priceRwf: null })).success).toBe(true);
   });
@@ -106,11 +112,11 @@ describe('livePublishBlockers', () => {
   });
 
   it('blocks a product with no confirmed RWF price', () => {
-    expect(livePublishBlockers(baseProduct({ priceRwf: null }))).toContain('no owner-confirmed RWF price');
+    expect(livePublishBlockers(baseProduct({ priceRwf: null }))).toContain('no RWF price');
   });
 
   it('blocks a product with no size variants', () => {
-    expect(livePublishBlockers(baseProduct({ variants: [] }))).toContain('no owner-confirmed size variants');
+    expect(livePublishBlockers(baseProduct({ variants: [] }))).toContain('no size options');
   });
 
   it('blocks a product missing a name or image', () => {

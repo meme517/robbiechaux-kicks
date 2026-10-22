@@ -27,7 +27,7 @@ export type VerificationStatus = 'pending' | 'verified';
 export interface Variant {
   id: string;
   size: string;
-  stock: number;
+  stock: number | null;
 }
 
 export interface Product {

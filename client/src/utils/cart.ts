@@ -81,7 +81,21 @@ export function revalidateCart(lines: CartLine[], products: Product[]): Revalida
       return { ...line, key, product, status: 'unavailable', issue: 'This product is not currently available for order.' };
     }
     const variant = findVariant(product, line.variantId, line.size);
-    if (!variant || variant.stock <= 0) {
+    if (!variant) {
+      const label = line.size ? `Size ${line.size}` : 'This variant';
+      return { ...line, key, product, status: 'unavailable', issue: `${label} is no longer available.` };
+    }
+    if (variant.stock === null) {
+      const label = line.size ? `Size ${line.size}` : 'This variant';
+      return {
+        ...line,
+        key,
+        product,
+        status: 'unavailable',
+        issue: `${label} is listed, but local store availability has not been confirmed.`,
+      };
+    }
+    if (variant.stock <= 0) {
       const label = line.size ? `Size ${line.size}` : 'This variant';
       return { ...line, key, product, status: 'unavailable', issue: `${label} is no longer available.` };
     }

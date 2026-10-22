@@ -13,13 +13,14 @@ import { getProviderProduct, ProviderError } from '../provider/kicksdb.js';
  * =============================================================================
  * CATALOG / INVENTORY SERVICE
  * -----------------------------------------------------------------------------
- * The store's OWN MongoDB inventory is the single authority for prices, sizes,
- * variants and stock. The provider supplies metadata only.
+ * The store's MongoDB catalog is the authority for public products and prices.
+ * Provider-listed sizes may be shown with unknown local stock; those sizes
+ * remain unavailable to cart ordering until the store confirms inventory.
  *
  * The PUBLIC catalog returns only products that are:
  *   - verificationStatus === 'verified'
  *   - published === true
- *   - backed by an owner-confirmed RWF price and variant list
+ *   - backed by a configured RWF price and at least one size option
  * The unrestricted provider catalog is NEVER returned by the public API.
  * =============================================================================
  */
@@ -120,7 +121,7 @@ export async function approveCandidate(params: {
   providerProductId: string;
   priceRwf: number | null;
   category: Product['category'];
-  variants: { id: string; size: string; stock: number }[];
+  variants: { id: string; size: string; stock: number | null }[];
   colorway?: string;
   sizeSystem?: string;
   featured?: boolean;
@@ -207,7 +208,7 @@ export async function upsertOwnerProduct(input: {
   brand?: string;
   colorway?: string;
   priceRwf: number | null;
-  variants: { id: string; size: string; stock: number }[];
+  variants: { id: string; size: string; stock: number | null }[];
   featured?: boolean;
   arrivedAt?: string;
   published?: boolean;

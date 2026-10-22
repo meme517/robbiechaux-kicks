@@ -7,16 +7,16 @@
  * SAME provider record — nothing is joined by array position or rank.
  *
  * Usage:
- *   npm run import:wishlist                 save matched products as unpublished drafts
+ *   npm run import:wishlist                 import the built-in list
  *   npm run import:wishlist -- --dry-run    search + print, write nothing
  *   npm run import:wishlist -- --file list.txt
  *   npm run import:wishlist -- --all-colorways
  *   npm run import:wishlist -- --limit 10   stop after N models (smoke test)
  *
  * HONESTY NOTES
- *  - Provider market prices are reference data, never the store's RWF selling price.
- *  - The provider carries no local stock data. Imported products stay unpublished
- *    until the owner supplies a real RWF price and size/stock variants.
+ *  - Provider USD prices are converted to RWF with USD_TO_RWF_RATE as requested.
+ *  - Provider size options are shown, but local stock remains unknown until the
+ *    store confirms it. Unknown-stock sizes cannot be added to the cart.
  *  - A model the provider does not carry is reported as SKIPPED, never faked.
  */
 import { connectMongo, closeMongo, productsCollection, allowlistCollection } from '../db/mongo.js';
@@ -296,6 +296,25 @@ function rankCandidates(candidates: ProviderProduct[]): ProviderProduct[] {
   });
 }
 
+function hasUsablePrice(c: ProviderProduct): boolean {
+  return preferredPrice(c) !== null;
+}
+
+function hasListedSizes(c: ProviderProduct): boolean {
+  return (c.variants ?? []).some((variant) => variant.size.trim().length > 0);
+}
+
+function toRwf(usd: number | null | undefined, rate: number): number | null {
+  if (usd === null || usd === undefined || !Number.isFinite(usd) || usd <= 0) return null;
+  return Math.max(500, Math.round((usd * rate) / 500) * 500);
+}
+
+function preferredPrice(c: ProviderProduct): number | null {
+  return [c.providerAvgPriceUsd, c.providerMinPriceUsd, c.providerMaxPriceUsd].find(
+    (price): price is number => typeof price === 'number' && Number.isFinite(price) && price > 0,
+  ) ?? null;
+}
+
 /**
  * Provider taxonomy -> store category. Boots and sandals get their own buckets
  * instead of being forced into "formal" or "sneakers".
@@ -444,8 +463,11 @@ async function planImport(
 
   // Closest silhouette first, then popularity.
   const ranked = rankCandidates(match.candidates);
-  const best = ranked[0];
-  if (!best) return { query, provider: null, product: null, reason: 'no matching provider record' };
+  const best = ranked.find((candidate) => hasUsablePrice(candidate) && hasListedSizes(candidate));
+  if (!best) {
+    const reason = ranked.some(hasUsablePrice) ? 'provider returned no size options' : 'no provider market price';
+    return { query, provider: ranked[0] ?? null, product: null, reason };
+  }
 
   if (seen.has(best.providerProductId)) {
     return {
@@ -461,6 +483,18 @@ async function planImport(
     return { query, provider: best, product: null, reason: 'provider taxonomy has no store category' };
   }
 
+  const priceUsd = preferredPrice(best);
+  const priceRwf = toRwf(priceUsd, config.catalog.usdToRwfRate);
+  if (priceRwf === null) {
+    return { query, provider: best, product: null, reason: 'provider returned no usable price' };
+  }
+  const sizeVariants = [
+    ...new Map(
+      (best.variants ?? [])
+        .filter((variant) => variant.size.trim())
+        .map((variant) => [normalize(variant.size), { ...variant, size: variant.size.trim() }]),
+    ).values(),
+  ];
   const record: Product = {
     id: `kicksdb:${best.providerProductId}`,
     provider: 'kicksdb',
@@ -478,11 +512,15 @@ async function planImport(
       return real.length > 0 ? real : [upgradeImageUrl(best.imageUrl)];
     })(),
     sourceUrl: best.sourceUrl,
-    priceRwf: null,
-    sizeSystem: 'EU',
-    variants: [],
-    verificationStatus: 'pending',
-    published: false,
+    priceRwf,
+    sizeSystem: blank(sizeVariants.find((variant) => variant.sizeType)?.sizeType),
+    variants: sizeVariants.map((variant) => ({
+      id: `size-${normalize(variant.size).replace(/\s+/g, '-')}`,
+      size: variant.size,
+      stock: null,
+    })),
+    verificationStatus: 'verified',
+    published: true,
     imageIsCatalogArt: true,
     imageAttribution: config.provider.imageAttribution,
     arrivedAt: new Date().toISOString(),
@@ -507,9 +545,10 @@ async function planImport(
       importMeta: {
         source: 'kicksdb',
         matchedPhrase: match.phrase,
-        sourcePriceUsd:
-          best.providerAvgPriceUsd ?? best.providerMinPriceUsd ?? best.providerMaxPriceUsd ?? null,
-        priceIsStoreConfirmed: false,
+        sourcePriceUsd: priceUsd,
+        usdToRwfRate: config.catalog.usdToRwfRate,
+        priceIsConverted: true,
+        stockIsUnconfirmed: true,
       },
     } as Product,
   };
@@ -555,16 +594,18 @@ async function main() {
     const product = p.product as Product;
     console.log(`${p.query}`);
     console.log(`  -> ${product.name}`);
-    console.log(`     ${product.id}  ${product.category}  unpublished draft`);
+    console.log(`     ${product.id}  ${product.category}  RWF ${product.priceRwf}`);
     const referenceUsd =
       p.provider?.providerAvgPriceUsd ??
       p.provider?.providerMinPriceUsd ??
       p.provider?.providerMaxPriceUsd;
     if (referenceUsd !== null && referenceUsd !== undefined) {
-      console.log(`     provider market reference: ${referenceUsd} USD (not a store price)`);
+      console.log(`     converted from provider price: ${referenceUsd} USD @ ${config.catalog.usdToRwfRate}`);
     }
     console.log(`     image: ${product.imageUrl}`);
-    console.log('     price and sizes/stock: owner confirmation required');
+    console.log(
+      `     provider-listed sizes: ${product.variants.map((v) => v.size).join(', ')} (local stock unconfirmed)`,
+    );
   }
 
   if (skipped.length > 0) {
@@ -620,7 +661,7 @@ async function main() {
 
   console.log(`\nWrote ${written} product(s) + allowlist entries to ${config.mongo.dbName}.`);
   console.log(
-    'All imported products are unpublished drafts. Approve each exact model with an owner-confirmed RWF price and real sizes/stock before it can appear on the storefront.',
+    'RWF prices use the configured USD_TO_RWF_RATE. Provider-listed sizes are shown as options, but local stock remains unconfirmed and cannot be added to the cart until the store confirms it.',
   );
 }
 

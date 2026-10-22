@@ -166,6 +166,39 @@ await check('cart revalidation flags price changes and unavailable items', () =>
   return 'price_changed, unavailable, unavailable-size OK';
 });
 
+await check('provider-listed size is visible but cannot be ordered without confirmed stock', () => {
+  const product = {
+    ...demoCatalog[0],
+    id: 'kicksdb:unknown-stock',
+    variants: [{ id: 'size-41', size: '41', stock: null }],
+  };
+  const sizes = deriveFilterOptions([product]).sizes;
+  assert(sizes.includes('41'), 'provider-listed size missing from filters');
+  const bySize = filterAndSortProducts([product], {
+    query: '', category: '', brand: '', size: '41', priceMin: '', priceMax: '', sort: 'featured',
+  });
+  assert(bySize.length === 1, 'provider-listed size cannot be filtered');
+  const [line] = revalidateCart(
+    [{ productId: product.id, variantId: 'size-41', size: '41', quantity: 1, priceSnapshot: product.priceRwf, addedAt: null }],
+    [product],
+  );
+  assert(line.status === 'unavailable', 'unconfirmed stock was accepted into the cart');
+  assert(line.issue.includes('not been confirmed'), 'cart does not explain the unconfirmed stock');
+  const card = renderToString(
+    <StaticRouter location="/">
+      <CartProvider>
+        <ProductCard product={product} />
+      </CartProvider>
+    </StaticRouter>,
+  );
+  assert(
+    card.includes('Catalog sizes (confirm availability):') && card.includes('41'),
+    'product card does not explain availability',
+  );
+  assert(!card.includes('Quick add'), 'quick-add enabled for unknown local stock');
+  return 'size listed, availability clearly unconfirmed, cart ordering blocked';
+});
+
 await check('WhatsApp order message is URL-encoded with sizes, SKUs, RWF subtotal', () => {
   const product = demoCatalog[0];
   const message = buildOrderMessage({

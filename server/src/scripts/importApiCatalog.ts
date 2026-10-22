@@ -34,7 +34,7 @@ const dryRun = process.argv.includes('--dry-run');
 const keepDemo = process.argv.includes('--keep-demo');
 const rate = Number(arg('rate') ?? config.catalog.usdToRwfRate);
 
-function printRecord(p: { id: string; name: string; brand?: string; category: string; priceRwf: number | null; imageUrl: string; gallery: string[]; variants: { size: string; stock: number }[] }) {
+function printRecord(p: { id: string; name: string; brand?: string; category: string; priceRwf: number | null; imageUrl: string; gallery: string[]; variants: { size: string; stock: number | null }[] }) {
   // Same guard the UI uses: source names already contain the brand.
   const label =
     p.brand && !p.name.toLowerCase().startsWith(p.brand.toLowerCase())

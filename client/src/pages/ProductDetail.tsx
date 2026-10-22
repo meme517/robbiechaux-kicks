@@ -79,17 +79,32 @@ export default function ProductDetail() {
   }
 
   const displayName = productLabel(product);
-  const availableVariants = product.variants.filter((v) => v.stock > 0);
+  const availableVariants = product.variants.filter((v) => v.stock !== null && v.stock > 0);
+  const unconfirmedVariants = product.variants.filter((v) => v.stock === null);
   const needsSize = product.variants.length > 0;
-  const selectedVariant = product.variants.find((v) => v.size === selectedSize && v.stock > 0) ?? null;
+  const selectedVariant =
+    product.variants.find((v) => v.size === selectedSize && v.stock !== 0) ?? null;
   const sizeReady = !needsSize || selectedVariant !== null;
-  const canOrder = product.priceRwf !== null && availableVariants.length > 0;
+  const canAddToCart =
+    product.priceRwf !== null && selectedVariant !== null && selectedVariant.stock !== null && selectedVariant.stock > 0;
+  const canAskStore = product.priceRwf !== null && sizeReady;
+  const addButtonLabel = selectedVariant?.stock === null
+    ? 'Stock unconfirmed'
+    : needsSize && !selectedVariant
+      ? 'Select a size'
+      : canAddToCart
+        ? 'Add to cart'
+        : 'Unavailable';
   const gallery = product.gallery.length > 0 ? product.gallery : [product.imageUrl];
   const alt = `${displayName} — ${product.colorway ?? categoryLabel(product.category)}`;
 
   const handleAdd = () => {
-    if (!sizeReady) {
-      setFeedback('Please select an available size before adding this item to your cart.');
+    if (!canAddToCart) {
+      setFeedback(
+        selectedVariant?.stock === null
+          ? 'Store stock is not confirmed for this size. Please ask the store on WhatsApp.'
+          : 'Please select an available size before adding this item to your cart.',
+      );
       return;
     }
     add(product, selectedVariant, 1);
@@ -147,9 +162,13 @@ export default function ProductDetail() {
           <div className="product-detail__price-row">
             <Price value={product.priceRwf} className="price--lg" />
             <span
-              className={`stock-badge stock-badge--${availableVariants.length > 0 ? 'in_stock' : 'out_of_stock'}`}
+              className={`stock-badge stock-badge--${availableVariants.length > 0 ? 'in_stock' : unconfirmedVariants.length > 0 ? 'low_stock' : 'out_of_stock'}`}
             >
-              {availableVariants.length > 0 ? 'Available in store' : 'Out of stock'}
+              {availableVariants.length > 0
+                ? 'Available in store'
+                : unconfirmedVariants.length > 0
+                  ? 'Confirm availability'
+                  : 'Out of stock'}
             </span>
           </div>
 
@@ -162,14 +181,14 @@ export default function ProductDetail() {
                   setSelectedSize(size);
                   setFeedback(`Size ${size} selected.`);
                 }}
-                legend={availableVariants.length === 0 ? 'Select a size (none available)' : 'Select a size'}
+                legend={unconfirmedVariants.length > 0 ? 'Select a catalog size to confirm' : 'Select a size'}
               />
             </div>
           )}
 
           <div className="product-detail__actions">
-            <button type="button" className="btn btn--gold btn--lg" onClick={handleAdd} disabled={!canOrder}>
-              {canOrder ? 'Add to cart' : 'Unavailable'}
+            <button type="button" className="btn btn--gold btn--lg" onClick={handleAdd} disabled={!canAddToCart}>
+              {addButtonLabel}
             </button>
             <a
               className="btn btn--outline-dark btn--lg"
@@ -177,9 +196,9 @@ export default function ProductDetail() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => {
-                if (!canOrder || !sizeReady) {
+                if (!canAskStore) {
                   e.preventDefault();
-                  setFeedback('Select an available size before ordering on WhatsApp.');
+                  setFeedback('Select a size before asking the store on WhatsApp.');
                 }
               }}
             >

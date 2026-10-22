@@ -20,7 +20,7 @@ export default function Cart() {
   const onCheckout = () => {
     if (hasUnavailable) {
       setNote(
-        `${unavailableCount} ${unavailableCount === 1 ? 'item is' : 'items are'} no longer available. Remove ${unavailableCount === 1 ? 'it' : 'them'} before placing your order.`,
+        `${unavailableCount} ${unavailableCount === 1 ? 'item needs' : 'items need'} availability confirmation or removal before checkout.`,
       );
       return;
     }
@@ -142,8 +142,8 @@ export default function Cart() {
             </p>
             {hasUnavailable && (
               <p className="cart-summary__warn" role="alert">
-                {unavailableCount} {unavailableCount === 1 ? 'item is' : 'items are'} no longer
-                available. Remove {unavailableCount === 1 ? 'it' : 'them'} to continue.
+                {unavailableCount} {unavailableCount === 1 ? 'item needs' : 'items need'} availability
+                confirmation or removal before checkout.
               </p>
             )}
             {hasUnpriced && (

@@ -69,6 +69,14 @@ describe('getPublicCatalog', () => {
     expect(meta.count).toBe(1);
   });
 
+  it('keeps provider-listed sizes public without claiming local stock', async () => {
+    toArray.mockResolvedValue([
+      mongoDoc({ variants: [{ id: 'size-42', size: '42', stock: null }] }),
+    ]);
+    const { products } = await getPublicCatalog();
+    expect(products[0]?.variants).toEqual([{ id: 'size-42', size: '42', stock: null }]);
+  });
+
   it('reports setup_pending with zero products', async () => {
     toArray.mockResolvedValue([]);
     const { products, meta } = await getPublicCatalog();
@@ -117,7 +125,7 @@ describe('approveCandidate', () => {
       variants: [{ id: 'size-42', size: '42', stock: 1 }],
       dryRun: true,
     });
-    expect(blockers).toContain('no owner-confirmed RWF price');
+    expect(blockers).toContain('no RWF price');
     expect(product.published).toBe(false);
     expect(product.verificationStatus).toBe('pending');
   });
