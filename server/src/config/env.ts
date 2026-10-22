@@ -71,6 +71,15 @@ export const config = {
   },
 
   /**
+   * Google Shopping results via SerpApi. The key is server-only and is never
+   * returned from status endpoints or written to catalog records.
+   */
+  serpApi: {
+    apiKey: optional('SERPAPI_API_KEY'),
+    timeoutMs: Number(optional('SERPAPI_TIMEOUT_MS', '15000')),
+  },
+
+  /**
    * OWNER: catalog image/data source used while no KicksDB key is configured.
    * DummyJSON is a key-free test catalog with real product photography; every
    * record is fetched whole (name + image + price travel together).

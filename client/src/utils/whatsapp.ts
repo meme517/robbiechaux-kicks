@@ -69,6 +69,20 @@ export function productOrderMessage(
   quantity = 1,
   isDemo = false,
 ): string {
+  if (product.provider === 'serpapi') {
+    const parts = [
+      `Hello ${storeConfig.storeName}! I found this Google Shopping listing on your website:`,
+      '',
+      `Product: ${displayName(product)}`,
+      ...(size ? [`Requested size: ${size}`] : ['Requested size: please advise']),
+      `Reference price: ${formatPlain(product.priceRwf ?? 0)} (please confirm your store price)`,
+      '',
+      'Please confirm the local availability, final price and delivery charges before I order.',
+    ];
+    if (isDemo) parts.unshift('[DEMO PREVIEW — this is not a real order.]', '');
+    return parts.join('\n');
+  }
+
   const unitPrice = product.priceRwf ?? 0;
   return buildOrderMessage({
     lines: [

@@ -4,7 +4,7 @@ Full-stack storefront for **Robbiechaux Kicks** — *Step in. Stand out.*
 Sneakers, loafers, formal shoes, slides and clogs · Downtown, Room L3-51, Kigali, Rwanda.
 
 Phase 2 adds a real backend: a Node/Express + MongoDB API, server-side integration with the
-**KicksDB** sneaker-data provider, a TypeScript React frontend, and a protected product-approval
+**Google Shopping via SerpApi** catalog importer, a TypeScript React frontend, and a protected product-approval
 workflow. Business details, routes, design and the "honest state" behaviour from Phase 1 are
 preserved exactly — nothing about the store, its prices, its email or its policies is invented.
 
@@ -58,8 +58,8 @@ Client workspace: `dev`, `build`, `preview`, `lint`, `typecheck`, `test`, `gener
 | --- | --- |
 | Business details (name, taglines, location, both phones, Instagram, delivery area, developer credit) | Carried over from Phase 1 **exactly as given** |
 | Store email | **Not available.** `[STORE_EMAIL]` is shown as an explicit placeholder; no `mailto:` link exists until a real address is entered |
-| Product identities, prices, stock | **Owner-gated.** Nothing is public until a product is verified, priced and has variants. A provider search hit is a *candidate*, never approval |
-| KicksDB provider calls | **Unverified in this environment.** No `KICKSDB_API_KEY` was available, so no live provider request has been executed here; the client is tested against mocked responses |
+| Product identities, prices, stock | **Owner-gated.** Imported marketplace listings may be published as enquiry-only references, including when no sizes were returned. A provider hit is never proof of local stock or the store's final price |
+| SerpApi provider calls | **Not live-tested here.** Configure `SERPAPI_API_KEY` privately before attempting a dry run; the provider client is tested against mocked responses |
 | MongoDB | **Not exercised here** (no local `mongod` was available). Tests mock the database; run `npm run seed:demo` against a running instance to verify end-to-end |
 | Promotions | **Disabled.** The historical 20% back-to-school discount shows nothing unless enabled with real dates and applicable products |
 | Delivery charges / timing / payment / returns | **Not invented.** Rendered as "confirmed by the store" |
@@ -80,7 +80,7 @@ persistent demo banner, and demo WhatsApp orders are prefixed
 ```
 browser ──/api──▶ Express API ──▶ MongoDB (store inventory: prices, sizes, stock)
                         │
-                        └──▶ KicksDB (product metadata: name, image) ── key is server-side only
+                        └──▶ SerpApi / Google Shopping (seller offers; server key only)
 ```
 
 The browser **never** talks to the provider and **never** sees a provider key. The only `VITE_`
@@ -96,6 +96,7 @@ server environment.
 | `models/product.ts` | Zod schemas (`productSchema`, `variantSchema`, `allowlistEntrySchema`) and `livePublishBlockers` / `isLivePublishable` |
 | `db/mongo.ts` | MongoDB connection, collections, indexes (default `mongodb://localhost:27017/robbie_shoes`) |
 | `provider/kicksdb.ts` | Provider client: search/lookup, response-shape parsing, identifier validation, timeouts, 401/403/429/404/5xx handling, Mongo-backed cache |
+| `provider/serpapi.ts` | Google Shopping provider client: offer and explicit-size mapping, key/quota errors, Mongo-backed cache; listing images are not republished |
 | `services/catalogService.ts` | Public catalog reads + `approveCandidate` / `upsertOwnerProduct` write paths |
 | `middleware/errors.ts` | `ApiError`, `notFoundHandler`, `errorHandler`, `requireAdmin` |
 | `routes/products.ts` | `GET /api/products`, `GET /api/products/:id`, `GET /api/status` |
@@ -142,18 +143,16 @@ Routes: `/`, `/shop`, `/product/:id`, `/about`, `/contact`, `/cart`, `/faq`, `*`
 1. **Name and image come from the same validated record.** They are never joined by array
    position, search rank or fuzzy brand match. A record missing an id, title or image is dropped
    entirely rather than paired with an unrelated image.
-2. **A search result is a candidate, not inventory.** The wishlist import uses the store-approved
-   KicksDB price conversion and requests KicksDB product variants for listed sizes; local stock
-   remains unknown until confirmed.
+2. **A search result is a candidate, not inventory.** Wishlist results come from Google Shopping
+   seller offers. Any listed sizes are unconfirmed; missing sizes are never inferred, and local
+   stock remains unknown until confirmed.
 3. **Unverified or unpriced products stay unpublished.** `livePublishBlockers()` lists exactly
    why a record is not live; unknown-stock sizes are visible but cannot be added to the cart.
 4. **No unrelated-shoe substitution.** A broken/missing image renders a neutral
    **"Image unavailable"** panel.
-5. **Provider imagery is labelled.** Provider-sourced metadata/art is flagged
-   (`imageIsCatalogArt`) and attributed with `PROVIDER_IMAGE_ATTRIBUTION`; catalog art is never
-   described as a photo of physical store stock.
-6. **RWF prices follow the store's configured policy.** Wishlist prices are converted from KicksDB
-   USD prices using `USD_TO_RWF_RATE`; demo prices remain placeholders.
+5. **Third-party listing images are not republished.** A neutral image fallback is shown instead.
+6. **RWF prices are marketplace references.** Google Shopping offer prices in the US market are
+   converted to RWF using `USD_TO_RWF_RATE`; the store must confirm the actual selling price.
 7. **Demo records are separable.** Demo ids are prefixed `demo:` and demo orders are marked.
 
 ---
@@ -167,6 +166,8 @@ Copy `server/.env.example` → `server/.env` and set:
 ```ini
 MONGODB_URI=mongodb://localhost:27017/robbie_shoes
 KICKSDB_API_KEY=            # from https://kicks.dev/api-keys ; blank = honest "setup pending"
+SERPAPI_API_KEY=            # optional Google Shopping source; keep only on the server
+SERPAPI_TIMEOUT_MS=15000
 PROVIDER_IMAGE_USE_APPROVED=false
 PROVIDER_IMAGE_ATTRIBUTION=Product imagery via KicksDB (StockX)
 CONTACT_PROVIDER=           # blank = contact form honestly unavailable
@@ -204,24 +205,30 @@ email: '[STORE_EMAIL]',   // ← replace with the real address
 Once a valid address replaces the placeholder, the footer and Contact page turn it into a working
 `mailto:` link automatically.
 
-### 5. Importing the KicksDB wishlist
+### 5. Importing the wishlist from Google Shopping
 
-The wishlist importer matches the requested KicksDB models, converts provider
-USD prices to RWF using `USD_TO_RWF_RATE` (default `1300`), and imports provider
-size options. It requests `display[variants]=true` from KicksDB's product-detail
-endpoint because search results do not include sizes. Review matches with a dry run first:
+The wishlist importer searches Google Shopping through SerpApi, converts US
+listing prices from USD to RWF using `USD_TO_RWF_RATE` (default `1300`), and
+imports sizes only when they are explicitly returned in the result. SerpApi's
+free plan currently allows 250 searches per month; each model may need one or
+two searches. Results are cached in MongoDB for the configured provider cache
+period, so repeat runs can reuse them. Review every candidate with a dry run first:
 
 ```bash
 npm run import:wishlist -- --dry-run
 npm run import:wishlist
 ```
 
-KicksDB does not report the store's local stock. Imported size options are
-labelled as unconfirmed, cannot be added to the cart, and must be confirmed by
-the store over WhatsApp. Provider prices are converted with the configured
-`USD_TO_RWF_RATE` (the approved default is `1300`). Set the rotated `KICKSDB_API_KEY` and Atlas
-`MONGODB_URI` in `server/.env` for the local import command; keep that file
-private and gitignored.
+Dry runs write no catalog products, but they do connect to MongoDB and cache
+provider responses to reduce repeat API usage. Shopping offer prices are
+marketplace references, not the store's confirmed prices. Sizes and local stock
+are never guaranteed; products with no returned sizes remain enquiry-only, and
+no SerpApi product can be added to the cart until the store confirms availability.
+Third-party listing images are not copied. Configure `SERPAPI_API_KEY` and
+`MONGODB_URI` privately in `server/.env` for local imports; keep that file
+private and gitignored. Never send the API key in chat or put it in client
+environment variables. Confirm prices and sizes with the store before importing
+or advertising products as available.
 
 ```bash
 # 1. Search provider candidates (read-only). Verify an EXACT match yourself.

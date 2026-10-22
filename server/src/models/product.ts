@@ -31,7 +31,7 @@ export type Category = (typeof CATEGORIES)[number];
 export const VERIFICATION_STATUSES = ['pending', 'verified'] as const;
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 
-export const providerIds = ['kicksdb', 'store', 'dummyjson'] as const;
+export const providerIds = ['kicksdb', 'serpapi', 'store', 'dummyjson'] as const;
 export type ProviderId = (typeof providerIds)[number];
 
 /**
@@ -98,7 +98,9 @@ export function livePublishBlockers(product: Product): string[] {
   if (product.priceRwf === null) blockers.push('no RWF price');
   if (!product.name?.trim()) blockers.push('missing verified name');
   if (!product.imageUrl?.trim()) blockers.push('missing verified image');
-  if (product.variants.length === 0) blockers.push('no size options');
+  if (product.variants.length === 0 && product.provider !== 'serpapi') {
+    blockers.push('no size options');
+  }
   return blockers;
 }
 

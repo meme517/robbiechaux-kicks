@@ -32,6 +32,11 @@ export default function ProductCard({ product }: { product: Product }) {
         {product.colorway && <p className="product-card__colorway">{product.colorway}</p>}
         {product.sku && <p className="product-card__sku">SKU: {product.sku}</p>}
         <Price value={product.priceRwf} />
+        {product.provider === 'serpapi' && (
+          <p className="product-card__sizes">
+            Marketplace reference price — confirm price and size with the store.
+          </p>
+        )}
         {sizeText && <p className="product-card__sizes">Sizes: {sizeText}</p>}
         {sourceSizes && (
           <p className="product-card__sizes">Catalog sizes (confirm availability): {sourceSizes}</p>

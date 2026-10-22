@@ -119,6 +119,17 @@ describe('livePublishBlockers', () => {
     expect(livePublishBlockers(baseProduct({ variants: [] }))).toContain('no size options');
   });
 
+  it('allows a SerpApi marketplace listing without sizes to be published for enquiries', () => {
+    const product = baseProduct({
+      id: 'serpapi:shopping-123',
+      provider: 'serpapi',
+      variants: [],
+      imageUrl: 'unavailable',
+      gallery: ['unavailable'],
+    });
+    expect(livePublishBlockers(product)).toEqual([]);
+  });
+
   it('blocks a product missing a name or image', () => {
     const noName = { ...baseProduct(), name: '   ' } as Product;
     const noImage = { ...baseProduct(), imageUrl: '' } as Product;

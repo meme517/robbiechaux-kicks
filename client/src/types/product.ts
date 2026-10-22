@@ -32,7 +32,7 @@ export interface Variant {
 
 export interface Product {
   id: string;
-  provider: 'kicksdb' | 'store' | 'dummyjson';
+  provider: 'kicksdb' | 'serpapi' | 'store' | 'dummyjson';
   providerProductId?: string;
   sku?: string;
   name: string;

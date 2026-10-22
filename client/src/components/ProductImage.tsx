@@ -27,7 +27,7 @@ export default function ProductImage({
     setFailed(false);
   }, [src]);
 
-  if (!src || failed) {
+  if (!src || src === 'unavailable' || failed) {
     return (
       <div
         className={`product-image product-image--fallback ${className}`.trim()}

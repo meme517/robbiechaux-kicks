@@ -81,6 +81,7 @@ export default function ProductDetail() {
   const displayName = productLabel(product);
   const availableVariants = product.variants.filter((v) => v.stock !== null && v.stock > 0);
   const unconfirmedVariants = product.variants.filter((v) => v.stock === null);
+  const sizesNotProvided = product.provider === 'serpapi' && product.variants.length === 0;
   const needsSize = product.variants.length > 0;
   const selectedVariant =
     product.variants.find((v) => v.size === selectedSize && v.stock !== 0) ?? null;
@@ -162,12 +163,14 @@ export default function ProductDetail() {
           <div className="product-detail__price-row">
             <Price value={product.priceRwf} className="price--lg" />
             <span
-              className={`stock-badge stock-badge--${availableVariants.length > 0 ? 'in_stock' : unconfirmedVariants.length > 0 ? 'low_stock' : 'out_of_stock'}`}
+              className={`stock-badge stock-badge--${availableVariants.length > 0 ? 'in_stock' : unconfirmedVariants.length > 0 || sizesNotProvided ? 'low_stock' : 'out_of_stock'}`}
             >
               {availableVariants.length > 0
                 ? 'Available in store'
                 : unconfirmedVariants.length > 0
                   ? 'Confirm availability'
+                  : sizesNotProvided
+                    ? 'Confirm price and size'
                   : 'Out of stock'}
             </span>
           </div>
@@ -185,11 +188,29 @@ export default function ProductDetail() {
               />
             </div>
           )}
+          {sizesNotProvided && (
+            <p className="fine-print">
+              This marketplace listing did not provide sizes. Contact the store to confirm the size,
+              local availability and final price before ordering.
+            </p>
+          )}
+          {product.provider === 'serpapi' && (
+            <p className="fine-print">
+              Price is a marketplace reference converted to RWF; it is not a confirmed store price.
+            </p>
+          )}
 
           <div className="product-detail__actions">
-            <button type="button" className="btn btn--gold btn--lg" onClick={handleAdd} disabled={!canAddToCart}>
-              {addButtonLabel}
-            </button>
+            {!sizesNotProvided && (
+              <button
+                type="button"
+                className="btn btn--gold btn--lg"
+                onClick={handleAdd}
+                disabled={!canAddToCart}
+              >
+                {addButtonLabel}
+              </button>
+            )}
             <a
               className="btn btn--outline-dark btn--lg"
               href={storeWhatsappUrl(productOrderMessage(product, selectedSize, 1, isDemo))}
@@ -198,11 +219,13 @@ export default function ProductDetail() {
               onClick={(e) => {
                 if (!canAskStore) {
                   e.preventDefault();
-                  setFeedback('Select a size before asking the store on WhatsApp.');
+                  setFeedback(sizesNotProvided
+                    ? 'Ask the store to confirm the size and price on WhatsApp.'
+                    : 'Select a size before asking the store on WhatsApp.');
                 }
               }}
             >
-              Order on WhatsApp
+              {product.provider === 'serpapi' ? 'Ask store on WhatsApp' : 'Order on WhatsApp'}
             </a>
           </div>
 

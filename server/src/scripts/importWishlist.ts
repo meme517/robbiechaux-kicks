@@ -1,33 +1,30 @@
 /**
- * OWNER WORKFLOW — bulk-import a NAMED MODEL LIST from KicksDB.
+ * OWNER WORKFLOW — bulk-import a NAMED MODEL LIST from Google Shopping.
  * -----------------------------------------------------------------------------
  * For every name in the list this script searches the provider, picks the
- * candidate that best matches the requested model, and imports it with its real
- * StockX imagery. Name, brand, SKU, colorway and gallery always come from the
- * SAME provider record — nothing is joined by array position or rank.
+ * candidate that best matches the requested model. Name, price, brand, colorway
+ * and listing link always come from that same shopping result; third-party
+ * images are not republished or joined by array position or rank.
  *
  * Usage:
  *   npm run import:wishlist                 import the built-in list
- *   npm run import:wishlist -- --dry-run    search + print, write nothing
+ *   npm run import:wishlist -- --dry-run    search + print, write no products
  *   npm run import:wishlist -- --file list.txt
  *   npm run import:wishlist -- --all-colorways
  *   npm run import:wishlist -- --limit 10   stop after N models (smoke test)
  *
  * HONESTY NOTES
- *  - Provider USD prices are converted to RWF with USD_TO_RWF_RATE as requested.
- *  - Provider size options are shown, but local stock remains unknown until the
- *    store confirms it. Unknown-stock sizes cannot be added to the cart.
- *  - A model the provider does not carry is reported as SKIPPED, never faked.
+ *  - Google Shopping listing USD prices are converted to RWF using the configured rate.
+ *  - Seller listing prices are market references, not guaranteed store prices.
+ *  - Sizes are included only when explicitly present in a result; local stock is
+ *    always unknown and listings cannot be added to the cart.
+ *  - Search results are cached to preserve the free monthly request allowance.
  */
 import { connectMongo, closeMongo, productsCollection, allowlistCollection } from '../db/mongo.js';
-import { config, hasProviderKey } from '../config/env.js';
+import { config } from '../config/env.js';
 import { productSchema, type Category, type Product } from '../models/product.js';
-import {
-  getProviderProduct,
-  searchProviderProducts,
-  ProviderError,
-  type ProviderProduct,
-} from '../provider/kicksdb.js';
+import { ProviderError, type ProviderProduct } from '../provider/kicksdb.js';
+import { hasSerpApiKey, searchGoogleShoppingProducts } from '../provider/serpapi.js';
 
 /** The models the store wants on the shelf. */
 const WISHLIST: string[] = [
@@ -87,6 +84,7 @@ function normalize(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFKD')
+    .replace(/'s\b/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
@@ -95,25 +93,16 @@ function tokens(value: string): string[] {
   return normalize(value).split(' ').filter(Boolean);
 }
 
-/**
- * StockX serves 140x100 thumbnails by default. Same asset, just a bigger box
- * requested through the CDN's own resize params.
- */
-function upgradeImageUrl(url: string): string {
-  return url.replace(/([?&])w=\d+/, '$1w=900').replace(/([?&])h=\d+/, '$1h=700');
-}
-
-function upgradeImageUrls(urls: string[]): string[] {
-  const upgraded = [...new Set(urls.map(upgradeImageUrl))];
-  return upgraded.length > 0 ? upgraded : [];
-}
-
 const FOOTWEAR_TYPES = new Set(['sneakers', 'soccer', 'football', 'sandals', 'boots']);
 const FOOTWEAR_TAG =
   /\b(sneaker|shoes?|boots?|sandals?|slides?|clogs?|loafers?|mules?|cleats?|soccer|football|basketball|lifestyle|performance|running|hiking)\b/;
 
 /** The provider also indexes apparel and accessories — never import those. */
 function isFootwear(c: ProviderProduct): boolean {
+  const listingText = normalize(`${c.name} ${c.model ?? ''}`);
+  if (/\b(glove|jersey|shirt|sock|short|pants|apparel|backpack|hat|cap|ball)\b/.test(listingText)) {
+    return false;
+  }
   if (c.productType && FOOTWEAR_TYPES.has(normalize(c.productType))) return true;
   const tags = normalize(
     [...(c.categories ?? []), c.category ?? '', c.secondaryCategory ?? ''].join(' '),
@@ -121,20 +110,40 @@ function isFootwear(c: ProviderProduct): boolean {
   return FOOTWEAR_TAG.test(tags);
 }
 
-/** True when the phrase's tokens appear as a CONTIGUOUS run in `target`. */
-function tokensContain(target: string, phrase: string): boolean {
-  const haystack = tokens(target);
-  const needle = tokens(phrase);
-  if (needle.length === 0 || needle.length > haystack.length) return false;
-  for (let i = 0; i <= haystack.length - needle.length; i += 1) {
-    if (needle.every((tok, j) => haystack[i + j] === tok)) return true;
-  }
-  return false;
+function matchesRequestedCategory(query: string, candidate: ProviderProduct): boolean {
+  const category = QUERY_CATEGORY_OVERRIDES[query];
+  if (!category) return true;
+  const title = normalize(`${candidate.name} ${candidate.model ?? ''}`);
+  const cues: Partial<Record<Category, RegExp>> = {
+    heels: /\b(heel|pump|stiletto|slingback|wedge)\b/,
+    flats: /\b(flat|mary jane|ballerina)\b/,
+    boots: /\bboot\b/,
+    sandals: /\bsandal\b/,
+    slides: /\b(slide|mule)\b/,
+    espadrilles: /\bespadrille\b/,
+    loafers: /\bloafer\b/,
+    football: /\b(cleat|soccer|football)\b/,
+  };
+  const cue = cues[category];
+  return !cue || cue.test(title);
 }
 
-/** StockX sometimes ships a grey box instead of a product photo. */
-function isPlaceholder(url: string): boolean {
-  return /placeholder/i.test(url);
+function equivalentToken(left: string, right: string): boolean {
+  if (left === right) return true;
+  return left.length > 3 && right.length > 3 && (
+    left.replace(/s$/, '') === right.replace(/s$/, '')
+  );
+}
+
+function tokensContainInOrder(target: string, phraseTokens: string[]): boolean {
+  const targetTokens = tokens(target);
+  let next = 0;
+  for (const token of targetTokens) {
+    const expected = phraseTokens[next];
+    if (expected && equivalentToken(token, expected)) next += 1;
+    if (next === phraseTokens.length) return true;
+  }
+  return false;
 }
 
 /** The schema rejects empty strings, and the provider happily sends them. */
@@ -226,11 +235,6 @@ function sameBrand(c: ProviderProduct, brand: string): boolean {
   return tokens(c.model ?? '').slice(0, 1)[0] === brand;
 }
 
-/** "ultraboost" should still find a model written "Ultra Boost". */
-function squashedContain(target: string, word: string): boolean {
-  return tokens(target).join('').includes(word);
-}
-
 /**
  * Find the most specific phrase from the query that the provider actually
  * carries. Matching is token-contiguous ("air jordan 3" never matches
@@ -238,51 +242,23 @@ function squashedContain(target: string, word: string): boolean {
  * does not collapse to a generic "nike" match.
  */
 function matchCandidates(query: string, candidates: ProviderProduct[]): Match | null {
-  const full = tokens(query);
-  if (full.length === 0) return null;
   const strippedTokens = tokens(stripBrandPrefix(query));
+  if (strippedTokens.length === 0) return null;
   const brand = brandOf(query);
-
-  const phrases: string[] = [];
-  const track = (list: string[], min: number) => {
-    for (let take = list.length; take >= min; take -= 1) {
-      const phrase = list.slice(0, take).join(' ');
-      // A bare number matches half of every catalog ("GT Cut 4", "Pegasus 41").
-      if (phrase && !/^\d+$/.test(phrase) && !phrases.includes(phrase)) phrases.push(phrase);
-    }
-  };
-  // Brand-stripped phrases come first: "Air Max" is what the provider models
-  // are called, "Nike Air Max" is only what a customer asks for. Unstripped
-  // phrases never fall below 2 words; a stripped phrase may be a single word
-  // ("Yeezy", "Samba") — that is the point of stripping.
-  if (strippedTokens.length > 0) track(strippedTokens, 1);
-  if (full.length >= 2) track(full, 2);
-
-  for (const phrase of phrases) {
-    const words = tokens(phrase);
-    const hits = candidates.filter((c) => {
-      const model = c.model ?? '';
-      // A one-word answer must be the model itself, not a coincidence in a
-      // long product title ("Puma Smash" is not a "Speedcat ... Smash").
-      if (words.length === 1) return tokensContain(model, phrase) || squashedContain(model, phrase);
-      return tokensContain(model, phrase) || tokensContain(c.name, phrase);
-    });
-    if (hits.length === 0) continue;
-    if (brand) {
-      const branded = hits.filter((c) => sameBrand(c, brand));
-      // Crossing brands only when the provider names no matching brand is
-      // how "Puma Ultra" became an adidas shoe — so it is not allowed.
-      if (branded.length === 0) continue;
-      return { phrase, candidates: branded };
-    }
-    return { phrase, candidates: hits };
-  }
-  return null;
+  const hits = candidates.filter((candidate) => {
+    const candidateText = `${candidate.model ?? ''} ${candidate.name}`;
+    const childListing = /\b(kids?|toddler|youth|infant|gs|grade school)\b/.test(normalize(candidateText));
+    if (childListing && !/\b(kids?|toddler|youth|infant|gs|grade school)\b/.test(normalize(query))) return false;
+    if (!tokensContainInOrder(candidateText, strippedTokens)) return false;
+    if (!matchesRequestedCategory(query, candidate)) return false;
+    return !brand || sameBrand(candidate, brand);
+  });
+  return hits.length > 0 ? { phrase: strippedTokens.join(' '), candidates: hits } : null;
 }
 
 /**
  * Closest silhouette first: a 3-word model ("Air Max 90") is a better answer
- * to "Nike Air Max" than a 6-word special edition. Popularity breaks ties.
+ * to "Nike Air Max" than a 6-word special edition. Provider order breaks ties.
  */
 function rankCandidates(candidates: ProviderProduct[]): ProviderProduct[] {
   return [...candidates].sort((a, b) => {
@@ -299,10 +275,6 @@ function rankCandidates(candidates: ProviderProduct[]): ProviderProduct[] {
 
 function hasUsablePrice(c: ProviderProduct): boolean {
   return preferredPrice(c) !== null;
-}
-
-function hasListedSizes(c: ProviderProduct): boolean {
-  return (c.variants ?? []).some((variant) => variant.size.trim().length > 0);
 }
 
 function toRwf(usd: number | null | undefined, rate: number): number | null {
@@ -424,9 +396,8 @@ async function planImport(
   query: string,
   seen: Set<string>,
 ): Promise<Plan> {
-  // KicksDB's search is fuzzy and brand-heavy queries ("Nike Air Jordan 4")
-  // mostly return apparel. Strip the brand and ask for a bigger page first,
-  // then fall back to the full query.
+  // Strip brand prefixes first for better model matching, then retry the full
+  // phrase if the narrower shopping query did not yield a match.
   const stripped = stripBrandPrefix(query);
   const attempts = stripped && stripped !== normalize(query) ? [stripped, normalize(query)] : [normalize(query)];
 
@@ -436,16 +407,16 @@ async function planImport(
   for (const attempt of attempts) {
     let candidates: ProviderProduct[];
     try {
-      candidates = await searchProviderProducts(attempt, 50);
+      candidates = await searchGoogleShoppingProducts(attempt);
       searched += 1;
     } catch (err) {
       if (!(err instanceof ProviderError) || err.kind !== 'not_found') throw err;
       lastFailure = { kind: err.kind, message: err.message };
       continue;
     }
-    // Air Jordans are matched off the provider's own taxonomy; keyword
-    // matching alone cannot tell a Jordan 4 from a "GT Cut 4" jersey.
-    const footwear = candidates.filter((c) => isFootwear(c) && !isPlaceholder(c.imageUrl));
+    // Require a footwear category before matching; a model number alone can
+    // also match apparel and accessories.
+    const footwear = candidates.filter(isFootwear);
     match = jordanMatches(query, footwear) ?? matchCandidates(query, footwear);
     if (match) break;
   }
@@ -476,25 +447,7 @@ async function planImport(
     };
   }
 
-  let source = best;
-  if (!hasListedSizes(source)) {
-    try {
-      const detail = await getProviderProduct(best.providerProductId, { includeVariants: true });
-      source = {
-        ...best,
-        ...detail,
-        variants: hasListedSizes(detail) ? detail.variants : best.variants,
-      };
-    } catch (error) {
-      if (!(error instanceof ProviderError) || error.kind !== 'not_found') throw error;
-      const detail =
-        `${error.kind}: ${error.message}`;
-      return { query, provider: best, product: null, reason: `could not load product sizes (${detail})` };
-    }
-  }
-  if (!hasListedSizes(source)) {
-    return { query, provider: source, product: null, reason: 'provider returned no size options' };
-  }
+  const source = best;
 
   const category = QUERY_CATEGORY_OVERRIDES[query] ?? categoryFor(source);
   if (!category) {
@@ -511,14 +464,18 @@ async function planImport(
       (source.variants ?? [])
         .filter((variant) => variant.size.trim())
         .map((variant) => {
-          const size = `${variant.sizeType ? `${variant.sizeType.toUpperCase()} ` : ''}${variant.size.trim()}`;
+          const listedSize = variant.size.trim();
+          const alreadyHasSystem = variant.sizeType && new RegExp(`^${variant.sizeType}\\b`, 'i').test(listedSize);
+          const size = variant.sizeType && !alreadyHasSystem
+            ? `${variant.sizeType.toUpperCase()} ${listedSize}`
+            : listedSize;
           return [normalize(size), { ...variant, size }];
         }),
     ).values(),
   ];
   const record: Product = {
-    id: `kicksdb:${best.providerProductId}`,
-    provider: 'kicksdb',
+    id: `serpapi:${best.providerProductId}`,
+    provider: 'serpapi',
     providerProductId: source.providerProductId,
     sku: blank(source.sku),
     // Name and images come from the SAME provider record — never joined.
@@ -526,12 +483,8 @@ async function planImport(
     brand: blank(source.brand),
     colorway: blank(source.colorway),
     category,
-    // StockX defaults to 140x100 thumbs; the same asset is served at any size.
-    imageUrl: upgradeImageUrl(source.imageUrl),
-    gallery: (() => {
-      const real = upgradeImageUrls(source.gallery.filter((g) => !isPlaceholder(g)));
-      return real.length > 0 ? real : [upgradeImageUrl(source.imageUrl)];
-    })(),
+    imageUrl: 'unavailable',
+    gallery: ['unavailable'],
     sourceUrl: source.sourceUrl,
     priceRwf,
     sizeSystem: blank(sizeVariants.find((variant) => variant.sizeType)?.sizeType),
@@ -542,8 +495,7 @@ async function planImport(
     })),
     verificationStatus: 'verified',
     published: true,
-    imageIsCatalogArt: true,
-    imageAttribution: config.provider.imageAttribution,
+    imageIsCatalogArt: false,
     arrivedAt: new Date().toISOString(),
   };
 
@@ -564,7 +516,7 @@ async function planImport(
     product: {
       ...parsed.data,
       importMeta: {
-        source: 'kicksdb',
+        source: 'google-shopping',
         matchedPhrase: match.phrase,
         sourcePriceUsd: priceUsd,
         usdToRwfRate: config.catalog.usdToRwfRate,
@@ -587,8 +539,8 @@ async function loadList(): Promise<string[]> {
 }
 
 async function main() {
-  if (!hasProviderKey()) {
-    console.error('No KICKSDB_API_KEY configured. Set it in server/.env first.');
+  if (!hasSerpApiKey()) {
+    console.error('No SERPAPI_API_KEY configured. Set it in server/.env first.');
     process.exitCode = 2;
     return;
   }
@@ -598,8 +550,9 @@ async function main() {
   const allColorways = flag('all-colorways');
 
   const list = (await loadList()).slice(0, limit);
-  console.log(`Searching KicksDB for ${list.length} model(s)...\n`);
+  console.log(`Searching Google Shopping for ${list.length} model(s)...\n`);
 
+  await connectMongo();
   const seen = new Set<string>();
   const plans: Plan[] = [];
   for (const query of list) {
@@ -621,11 +574,13 @@ async function main() {
       p.provider?.providerMinPriceUsd ??
       p.provider?.providerMaxPriceUsd;
     if (referenceUsd !== null && referenceUsd !== undefined) {
-      console.log(`     converted from provider price: ${referenceUsd} USD @ ${config.catalog.usdToRwfRate}`);
+      console.log(`     converted listing price: ${referenceUsd} USD @ ${config.catalog.usdToRwfRate}`);
     }
     console.log(`     image: ${product.imageUrl}`);
     console.log(
-      `     provider-listed sizes: ${product.variants.map((v) => v.size).join(', ')} (local stock unconfirmed)`,
+      product.variants.length > 0
+        ? `     sizes shown in listing: ${product.variants.map((v) => v.size).join(', ')} (local stock unconfirmed)`
+        : '     size not provided in search result; ask store to confirm',
     );
   }
 
@@ -643,7 +598,7 @@ async function main() {
   console.log(`\n${imported.length}/${plans.length} model(s) ready.`);
 
   if (dryRun) {
-    console.log('Dry run — nothing written.');
+    console.log('Dry run — no catalog products written. Shopping search results were cached.');
     return;
   }
   if (imported.length === 0) {
@@ -661,10 +616,10 @@ async function main() {
     const clean = Object.fromEntries(Object.entries(product).filter(([, v]) => v !== undefined));
     await products.updateOne({ id: product.id }, { $set: clean }, { upsert: true });
     await allowlist.updateOne(
-      { provider: 'kicksdb', providerProductId: product.providerProductId },
+      { provider: 'serpapi', providerProductId: product.providerProductId },
       {
         $set: {
-          provider: 'kicksdb',
+          provider: 'serpapi',
           providerProductId: product.providerProductId,
           sku: product.sku,
           priceRwf: product.priceRwf,
@@ -682,7 +637,7 @@ async function main() {
 
   console.log(`\nWrote ${written} product(s) + allowlist entries to ${config.mongo.dbName}.`);
   console.log(
-    'RWF prices use the configured USD_TO_RWF_RATE. Provider-listed sizes are shown as options, but local stock remains unconfirmed and cannot be added to the cart until the store confirms it.',
+    'Google Shopping offer prices are references converted to RWF using USD_TO_RWF_RATE. Confirm the actual store price and local size availability before ordering.',
   );
 }
 
