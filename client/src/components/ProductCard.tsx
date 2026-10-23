@@ -24,6 +24,7 @@ export default function ProductCard({ product }: { product: Product }) {
       >
         <ProductImage
           src={product.imageUrl}
+          providerProductId={product.providerProductId}
           alt={alt}
           category={product.category}
           className="product-card__image"

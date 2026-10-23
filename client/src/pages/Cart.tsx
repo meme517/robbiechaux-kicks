@@ -75,7 +75,13 @@ export default function Cart() {
                   key={item.key}
                 >
                   <Link className="cart-item__media" to={`/product/${item.productId}`} aria-label={`View ${displayName}`}>
-                    <ProductImage src={item.imageUrl} alt={displayName} width={112} height={84} />
+                    <ProductImage
+                      src={item.imageUrl}
+                      providerProductId={item.providerProductId}
+                      alt={displayName}
+                      width={112}
+                      height={84}
+                    />
                   </Link>
 
                   <div className="cart-item__info">

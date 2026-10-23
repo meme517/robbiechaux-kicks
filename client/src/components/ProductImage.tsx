@@ -3,6 +3,7 @@ import CategoryIcon from './CategoryIcon';
 
 interface ProductImageProps {
   src?: string | null;
+  providerProductId?: string | null;
   alt: string;
   category?: string;
   className?: string;
@@ -17,6 +18,7 @@ interface ProductImageProps {
  */
 export default function ProductImage({
   src,
+  providerProductId,
   alt,
   category = 'sneakers',
   className = '',
@@ -24,13 +26,24 @@ export default function ProductImage({
   width = 480,
   height = 360,
 }: ProductImageProps) {
-  const [failed, setFailed] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
 
   useEffect(() => {
-    setFailed(false);
-  }, [src]);
+    setImageIndex(0);
+  }, [src, providerProductId]);
 
-  if (!src || src === 'unavailable' || failed) {
+  const localImages = /^shopping-[a-f0-9]+$/i.test(providerProductId ?? '')
+    ? ['webp', 'jpg', 'jpeg', 'png'].map(
+      (extension) => `/images/products/${providerProductId}.${extension}`,
+    )
+    : [];
+  const imageSources = [
+    ...(src && src !== 'unavailable' ? [src] : []),
+    ...localImages.filter((image) => image !== src),
+  ];
+  const imageSrc = imageSources[imageIndex];
+
+  if (!imageSrc) {
     return (
       <div
         className={`product-image product-image--fallback ${className}`.trim()}
@@ -47,13 +60,13 @@ export default function ProductImage({
   return (
     <img
       className={`product-image ${className}`.trim()}
-      src={src}
+      src={imageSrc}
       alt={alt}
       width={width}
       height={height}
       loading={lazy ? 'lazy' : 'eager'}
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() => setImageIndex((index) => index + 1)}
     />
   );
 }

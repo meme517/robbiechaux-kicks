@@ -151,7 +151,9 @@ Routes: `/`, `/shop`, `/product/:id`, `/about`, `/contact`, `/cart`, `/faq`, `*`
 4. **No unrelated-shoe substitution.** A broken or missing photo shows an
    illustrated footwear-category icon clearly labelled **"Illustration only —
    product photo unavailable"**. It is not represented as a photo of that model.
-5. **Third-party listing images are not republished.** A neutral image fallback is shown instead.
+5. **Images are exact-ID matched and permission-gated.** Product photos are included only when the
+   store confirms permission to reproduce and redistribute them. An image is matched by the exact
+   provider product ID; missing images keep the illustrated fallback rather than using another shoe.
 6. **RWF prices are marketplace references.** Google Shopping offer prices in the US market are
    converted to RWF using `USD_TO_RWF_RATE`; the store must confirm the actual selling price.
 7. **Demo records are separable.** Demo ids are prefixed `demo:` and demo orders are marked.
@@ -225,17 +227,19 @@ provider responses to reduce repeat API usage. Shopping offer prices are
 marketplace references, not the store's confirmed prices. Sizes and local stock
 are never guaranteed; products with no returned sizes remain enquiry-only, and
 no SerpApi product can be added to the cart until the store confirms availability.
-Third-party listing images are not copied. Configure `SERPAPI_API_KEY` and
+Shopping-result images are copied into the storefront only when the store confirms it has
+permission to reproduce, redistribute, and display them commercially. Configure `SERPAPI_API_KEY` and
 `MONGODB_URI` privately in `server/.env` for local imports; keep that file
 private and gitignored. Never send the API key in chat or put it in client
 environment variables. Confirm prices and sizes with the store before importing
 or advertising products as available.
 
-### Store-owned product photos
+### Authorized product photos
 
 Use original photos taken by the store or image files for which the store has
-reuse permission. Do not download or copy Google Shopping/seller photos without
-permission. Place each photo in `client/public/images/products/`, named with
+permission to reproduce and redistribute. Do not download or copy Google
+Shopping/seller photos without permission. Place each photo in
+`client/public/images/products/`, named with
 the exact `provider_product_id` from the generated manifest (for example
 `shopping-abc123.webp`). Supported formats are `.webp`, `.jpg`, `.jpeg`, and
 `.png`. The photo directory is included in the storefront build and deployment.

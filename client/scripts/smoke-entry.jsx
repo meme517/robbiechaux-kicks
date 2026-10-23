@@ -10,6 +10,7 @@ import { StaticRouter } from 'react-router-dom';
 import { AppRoutes } from '../src/App';
 import { CartProvider } from '../src/context/CartContext';
 import ProductCard from '../src/components/ProductCard';
+import ProductImage from '../src/components/ProductImage';
 import Logo from '../src/components/Logo';
 import { storeConfig, hasRealEmail } from '../src/config/storeConfig';
 import { demoCatalog } from '../src/data/demoCatalog';
@@ -103,6 +104,25 @@ await check('missing logo renders placeholder, never a broken image icon', () =>
   assert(html.includes('logo__placeholder') || html.includes('logo__img'), 'logo block missing');
   assert(!html.includes('broken'), 'unexpected broken-image marker');
   return 'logo fallback present';
+});
+
+await check('SerpApi product images resolve by exact product ID only', () => {
+  const html = renderToString(
+    <ProductImage
+      src="unavailable"
+      providerProductId="shopping-a1b2c3"
+      alt="Catalog shoe"
+    />,
+  );
+  assert(
+    html.includes('src="/images/products/shopping-a1b2c3.webp"'),
+    'exact provider ID should resolve to a local image path',
+  );
+  const invalid = renderToString(
+    <ProductImage src="unavailable" providerProductId="../other-image" alt="Catalog shoe" />,
+  );
+  assert(invalid.includes('product-image--fallback'), 'invalid IDs must use the illustration fallback');
+  return 'exact-ID image mapping and invalid-ID fallback work';
 });
 
 await check('every demo record has name + image + price from the same record', () => {

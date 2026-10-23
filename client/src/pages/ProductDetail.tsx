@@ -131,6 +131,7 @@ export default function ProductDetail() {
         <div className="product-detail__gallery">
           <ProductImage
             src={gallery[activeImage]}
+            providerProductId={product.providerProductId}
             alt={alt}
             category={product.category}
             lazy={false}
@@ -149,6 +150,7 @@ export default function ProductDetail() {
                   >
                     <ProductImage
                       src={src}
+                      providerProductId={product.providerProductId}
                       alt=""
                       category={product.category}
                       width={96}

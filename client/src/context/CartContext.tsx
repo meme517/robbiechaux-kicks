@@ -18,6 +18,7 @@ export interface CartItem extends CartLine {
   name: string;
   brand?: string;
   sku?: string | null;
+  providerProductId?: string;
   imageUrl: string;
   priceRwf: number | null;
 }
@@ -156,6 +157,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         name: product ? productLabel(product) : 'Item no longer in catalog',
         brand: product?.brand,
         sku: product?.sku ?? null,
+        providerProductId: product?.providerProductId,
         imageUrl: product?.imageUrl ?? '',
         priceRwf: product ? product.priceRwf : line.priceSnapshot,
       };
