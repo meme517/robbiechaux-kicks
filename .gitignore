@@ -12,6 +12,7 @@ dist-ssr
 npm-debug.log*
 client/scripts/.smoke-bundle.mjs
 server/dist
+server/product-image-manifest.csv
 
 # local dev runtime (MongoDB binary + data + logs)
 .tools

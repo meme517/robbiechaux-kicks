@@ -230,6 +230,29 @@ private and gitignored. Never send the API key in chat or put it in client
 environment variables. Confirm prices and sizes with the store before importing
 or advertising products as available.
 
+### Store-owned product photos
+
+Use original photos taken by the store or image files for which the store has
+reuse permission. Do not download or copy Google Shopping/seller photos without
+permission. Place each photo in `client/public/images/products/`, named with
+the exact `provider_product_id` from the generated manifest (for example
+`shopping-abc123.webp`). Supported formats are `.webp`, `.jpg`, `.jpeg`, and
+`.png`. The photo directory is included in the storefront build and deployment.
+
+From the `server` directory, create the product-to-filename list and then check
+which photos will match before updating catalog records:
+
+```bash
+npm run images:manifest
+npm run images:sync -- --dry-run
+npm run images:sync
+```
+
+Commit and deploy the added image files after syncing. The wishlist importer
+also keeps a matching store photo instead of replacing it with a placeholder.
+Products without an exact matching store photo continue to show the neutral
+fallback; no unrelated image is substituted.
+
 ```bash
 # 1. Search provider candidates (read-only). Verify an EXACT match yourself.
 npm run import:search -- --query "DZ5485-100"

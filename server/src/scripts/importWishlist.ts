@@ -25,6 +25,7 @@ import { config } from '../config/env.js';
 import { productSchema, type Category, type Product } from '../models/product.js';
 import { ProviderError, type ProviderProduct } from '../provider/kicksdb.js';
 import { hasSerpApiKey, searchGoogleShoppingProducts } from '../provider/serpapi.js';
+import { storeProductImagePath } from '../services/storeProductImages.js';
 
 /** The models the store wants on the shelf. */
 const WISHLIST: string[] = [
@@ -473,6 +474,7 @@ async function planImport(
         }),
     ).values(),
   ];
+  const storeImage = storeProductImagePath(source.providerProductId);
   const record: Product = {
     id: `serpapi:${best.providerProductId}`,
     provider: 'serpapi',
@@ -483,8 +485,8 @@ async function planImport(
     brand: blank(source.brand),
     colorway: blank(source.colorway),
     category,
-    imageUrl: 'unavailable',
-    gallery: ['unavailable'],
+    imageUrl: storeImage ?? 'unavailable',
+    gallery: [storeImage ?? 'unavailable'],
     sourceUrl: source.sourceUrl,
     priceRwf,
     sizeSystem: blank(sizeVariants.find((variant) => variant.sizeType)?.sizeType),

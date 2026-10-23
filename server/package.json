@@ -17,7 +17,9 @@
     "import:search": "tsx src/scripts/importSearch.ts",
     "import:approve": "tsx src/scripts/approveCandidate.ts",
     "import:api": "tsx src/scripts/importApiCatalog.ts",
-    "import:wishlist": "tsx src/scripts/importWishlist.ts"
+    "import:wishlist": "tsx src/scripts/importWishlist.ts",
+    "images:manifest": "tsx src/scripts/syncProductImages.ts --manifest",
+    "images:sync": "tsx src/scripts/syncProductImages.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
