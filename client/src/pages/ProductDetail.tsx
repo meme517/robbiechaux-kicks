@@ -129,7 +129,13 @@ export default function ProductDetail() {
 
       <div className="product-detail">
         <div className="product-detail__gallery">
-          <ProductImage src={gallery[activeImage]} alt={alt} lazy={false} className="product-detail__main-image" />
+          <ProductImage
+            src={gallery[activeImage]}
+            alt={alt}
+            category={product.category}
+            lazy={false}
+            className="product-detail__main-image"
+          />
           {gallery.length > 1 && (
             <ul className="product-detail__thumbs">
               {gallery.map((src, index) => (
@@ -141,7 +147,13 @@ export default function ProductDetail() {
                     aria-label={`View image ${index + 1} of ${gallery.length}`}
                     aria-current={index === activeImage}
                   >
-                    <ProductImage src={src} alt="" width={96} height={72} />
+                    <ProductImage
+                      src={src}
+                      alt=""
+                      category={product.category}
+                      width={96}
+                      height={72}
+                    />
                   </button>
                 </li>
               ))}

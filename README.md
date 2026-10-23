@@ -148,8 +148,9 @@ Routes: `/`, `/shop`, `/product/:id`, `/about`, `/contact`, `/cart`, `/faq`, `*`
    stock remains unknown until confirmed.
 3. **Unverified or unpriced products stay unpublished.** `livePublishBlockers()` lists exactly
    why a record is not live; unknown-stock sizes are visible but cannot be added to the cart.
-4. **No unrelated-shoe substitution.** A broken/missing image renders a neutral
-   **"Image unavailable"** panel.
+4. **No unrelated-shoe substitution.** A broken or missing photo shows an
+   illustrated footwear-category icon clearly labelled **"Illustration only —
+   product photo unavailable"**. It is not represented as a photo of that model.
 5. **Third-party listing images are not republished.** A neutral image fallback is shown instead.
 6. **RWF prices are marketplace references.** Google Shopping offer prices in the US market are
    converted to RWF using `USD_TO_RWF_RATE`; the store must confirm the actual selling price.

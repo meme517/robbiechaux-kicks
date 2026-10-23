@@ -22,7 +22,12 @@ export default function ProductCard({ product }: { product: Product }) {
         to={`/product/${product.id}`}
         aria-label={`View details for ${displayName}`}
       >
-        <ProductImage src={product.imageUrl} alt={alt} className="product-card__image" />
+        <ProductImage
+          src={product.imageUrl}
+          alt={alt}
+          category={product.category}
+          className="product-card__image"
+        />
       </Link>
       <div className="product-card__body">
         {product.featured && <span className="product-card__flag">Featured</span>}

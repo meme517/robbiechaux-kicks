@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import CategoryIcon from './CategoryIcon';
 
 interface ProductImageProps {
   src?: string | null;
   alt: string;
+  category?: string;
   className?: string;
   lazy?: boolean;
   width?: number;
@@ -11,11 +13,12 @@ interface ProductImageProps {
 
 /**
  * Product image with reserved dimensions (no layout shift), lazy loading and a
- * neutral "Image unavailable" fallback. Never substitutes an unrelated shoe.
+ * category illustration fallback. It never substitutes an unrelated product photo.
  */
 export default function ProductImage({
   src,
   alt,
+  category = 'sneakers',
   className = '',
   lazy = true,
   width = 480,
@@ -33,14 +36,10 @@ export default function ProductImage({
         className={`product-image product-image--fallback ${className}`.trim()}
         style={{ aspectRatio: `${width} / ${height}` }}
         role="img"
-        aria-label={alt ? `${alt} — image unavailable` : 'Image unavailable'}
+        aria-label={`${alt ? `${alt} — ` : ''}${category} illustration, not a product photo`}
       >
-        <svg viewBox="0 0 24 24" width="40" height="40" aria-hidden="true" focusable="false">
-          <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M3 16l5-4 4 3 3-2 6 5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <circle cx="9" cy="10" r="1.5" fill="currentColor" />
-        </svg>
-        <span>Image unavailable</span>
+        <CategoryIcon category={category} className="product-image__illustration" />
+        <span>Illustration only — product photo unavailable</span>
       </div>
     );
   }
